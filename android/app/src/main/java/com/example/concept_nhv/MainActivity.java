@@ -14,7 +14,6 @@ import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
 import android.webkit.CookieManager;
 
-
 public class MainActivity extends FlutterActivity {
     private static final String CHANNEL = "samples.flutter.dev/cookies";
 
@@ -25,8 +24,8 @@ public class MainActivity extends FlutterActivity {
                 .setMethodCallHandler(
                         (call, result) -> {
                             // This method is invoked on the main thread.
-                            if (call.method.equals("receiveCookies")) {
-                                String cookies = receiveCookies();
+                            if (call.method.equals("receiveCFCookies")) {
+                                String cookies = receiveCFCookies();
 
                                 if (cookies != "") {
                                     result.success(cookies);
@@ -39,18 +38,23 @@ public class MainActivity extends FlutterActivity {
                         });
     }
 
-    private String receiveCookies() {
-        return CookieManager.getInstance().getCookie("https://nhentai.net");
-        
+    private String receiveCFCookies() {
+        // return CookieManager.getInstance().getCookie("https://nhentai.net");
+        // todo 20240211 not working, retuned 403 somehow
+        return CookieManager.getInstance().getCookie("https://nhentai.net").split("; ")[1].split("=")[1];
+
         // int batteryLevel = -1;
         // if (VERSION.SDK_INT >= VERSION_CODES.LOLLIPOP) {
-        //     BatteryManager batteryManager = (BatteryManager) getSystemService(BATTERY_SERVICE);
-        //     batteryLevel = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        // BatteryManager batteryManager = (BatteryManager)
+        // getSystemService(BATTERY_SERVICE);
+        // batteryLevel =
+        // batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
         // } else {
-        //     Intent intent = new ContextWrapper(getApplicationContext()).registerReceiver(null,
-        //             new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        //     batteryLevel = (intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100) /
-        //             intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+        // Intent intent = new
+        // ContextWrapper(getApplicationContext()).registerReceiver(null,
+        // new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        // batteryLevel = (intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100) /
+        // intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
         // }
 
         // return batteryLevel;

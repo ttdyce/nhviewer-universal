@@ -82,7 +82,6 @@ class CurrentComicModel extends ChangeNotifier {
 class AppModel extends ChangeNotifier {
   final List<NHList> _fetchedComics = [];
 
-  int comicsLoaded = 0;
   // todo 20240211 is exposing $page problematic?
   int pageLoaded = 1;
 
@@ -97,11 +96,14 @@ class AppModel extends ChangeNotifier {
               HttpHeaders.cookieHeader: "cf_clearance=$token",
             }))
         .then((response) {
-      print('https://nhentai.net/api/galleries/search?query=chinese&page=$page');
+      print(
+          'https://nhentai.net/api/galleries/search?query=chinese&page=$page');
       print(response);
       // _fetchedComics.add(NHList.fromJson(Sample.samplejson));
       _fetchedComics.add(NHList.fromJson(response.data));
-      comicsLoaded += _fetchedComics.last.perPage ?? 0;
+      debugPrint(
+          "[aa] new first ${_fetchedComics.last.result!.first.id} - ${_fetchedComics.last.result!.first.title!.japanese}");
+      // comicsLoaded += _fetchedComics.last.perPage ?? 0;
       // This call tells the widgets that are listening to this model to rebuild.
       notifyListeners();
     }).catchError((e) {
@@ -112,17 +114,19 @@ class AppModel extends ChangeNotifier {
     pageLoaded = page;
   }
 
-  /// combine and return fetched comics, or local comics, depends on which page is loaded
-  NHList? get comics {
+  int get comicsLoaded {
+    if (_fetchedComics.isEmpty) return 0;
+
+    return _fetchedComics
+        .map((e) => e.perPage ?? 0)
+        .reduce((value, element) => value + element);
+  }
+
+  List<Result>? get comics {
     if (_fetchedComics.isEmpty) return null;
 
-    return _fetchedComics.reduce((value, element) {
-      // todo 20240208 combine every fetched comics
-      // todo 20240211 something wrong here
-      value.perPage = value.perPage! + element.perPage!;
-      value.result!.addAll(element.result!);
-
-      return value;
+    return _fetchedComics.map((e) => e.result).reduce((value, element) {
+      return [...value!, ...element!];
     });
   }
 }
@@ -460,63 +464,92 @@ class _AppState extends State<App> {
     final mid = nhlist.result!.first.mediaId;
     final ext = extMap[nhlist.result!.first.images!.thumbnail!.t];
      */
-              final NHList? nhlist = appModel.comics;
               final extMap = {'j': 'jpg', 'p': 'png'};
 
               return SliverGrid(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 200.0,
-                  mainAxisExtent: 240,
+                  maxCrossAxisExtent: 180.0,
+                  mainAxisExtent: 300,
+                  
                   // mainAxisSpacing: 10.0,
                   // crossAxisSpacing: 10.0,
                   // childAspectRatio: 4.0,
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (BuildContext context, int index) {
+                    final nhresult = appModel.comics![index];
                     if (index + 1 == appModel.comicsLoaded) {
                       debugPrint(
                           'Loading more... page: ${appModel.pageLoaded + 1}');
                       appModel.fetchIndex(page: appModel.pageLoaded + 1);
                     }
                     debugPrint("index: $index");
-                    if (nhlist == null) return Container();
-                    final id = nhlist.result![index].id!;
-                    final mid = nhlist.result![index].mediaId;
-                    final ext =
-                        extMap[nhlist.result![index].images!.thumbnail!.t];
+                    // if (nhlist == null) return Container();
+                    final id = nhresult.id!;
+                    final mid = nhresult.mediaId;
+                    final title = nhresult.title!.english!;
+                    final pages = nhresult.numPages;
+                    final ext = extMap[nhresult.images!.thumbnail!.t];
                     var thumbnailLink =
                         "https://t.nhentai.net/galleries/$mid/thumb.$ext";
                     print("https://t.nhentai.net/galleries/$mid/thumb.$ext");
 
-                    return Card(
-                      // clipBehavior is necessary because, without it, the InkWell's animation
-                      // will extend beyond the rounded edges of the [Card] (see https://github.com/flutter/flutter/issues/109776)
-                      // This comes with a small performance cost, and you should not set [clipBehavior]
-                      // unless you need it.
-                      clipBehavior: Clip.hardEdge,
-                      child: InkWell(
-                        splashColor: Colors.blue.withAlpha(30),
-                        onTap: () async {
-                          // debugPrint('Card tapped.');
-                          Provider.of<CurrentComicModel>(context, listen: false)
-                              .fetchComic(id);
-                          await context.push(
-                              Uri(path: '/third', queryParameters: {'id': id})
-                                  .toString());
-                          Provider.of<CurrentComicModel>(context, listen: false)
-                              .clearComic();
-                        },
-                        child: SizedBox(
-                          // width: 300,
-                          // height: 900,
-                          child: Column(
-                            children: [
-                              Image.network(thumbnailLink),
-                              // Text(thumbnailLink),
-                            ],
+                    if (index % 25 == 0) {
+                      final title = nhresult.title!.japanese!;
+                      debugPrint("[aa] $index%25 = 0, id = $id ($title)");
+                      debugPrint("[aa] ${nhresult.id}");
+                    }
+
+                    return Column(
+                      children: [
+                        Card(
+                          // clipBehavior is necessary because, without it, the InkWell's animation
+                          // will extend beyond the rounded edges of the [Card] (see https://github.com/flutter/flutter/issues/109776)
+                          // This comes with a small performance cost, and you should not set [clipBehavior]
+                          // unless you need it.
+                          clipBehavior: Clip.hardEdge,
+                          child: InkWell(
+                            splashColor: Colors.blue.withAlpha(30),
+                            onTap: () async {
+                              // debugPrint('Card tapped.');
+                              Provider.of<CurrentComicModel>(context,
+                                      listen: false)
+                                  .fetchComic(id);
+                              await context.push(Uri(
+                                  path: '/third',
+                                  queryParameters: {'id': id}).toString());
+                              Provider.of<CurrentComicModel>(context,
+                                      listen: false)
+                                  .clearComic();
+                            },
+                            child: Column(
+                              children: [
+                                Image.network(thumbnailLink),
+                                // Text(thumbnailLink),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
+                        Text(
+                          title,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 2,
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.add_to_photos_outlined),
+                              onPressed: () {},
+                            ),
+                            Text("${pages}p"),
+                            IconButton(
+                              icon: const Icon(Icons.favorite_outline),
+                              onPressed: () {},
+                            ),
+                          ],
+                        )
+                      ],
                     );
                   },
                   // childCount: 1,

@@ -1,17 +1,14 @@
 class CFConfig{
-  final int id;
   final String userAgent;
   final String token;
 
   const CFConfig({
-    required this.id,
     required this.userAgent,
     required this.token,
   });
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'useragent': userAgent,
       'token': token,
     };
@@ -20,11 +17,39 @@ class CFConfig{
 
 /// Code generated using [JSON to Dart converter](https://javiercbk.github.io/json_to_dart/) by Javier Lecuona. 
 /// Note that id and mediaid could be both string and int
+class NHList {
+  List<NHComic>? result;
+  int? numPages;
+  int? perPage;
+
+  NHList({this.result, this.numPages, this.perPage});
+
+  NHList.fromJson(Map<String, dynamic> json) {
+    if (json['result'] != null) {
+      result = <NHComic>[];
+      json['result'].forEach((v) {
+        result!.add(new NHComic.fromJson(v));
+      });
+    }
+    numPages = json['num_pages'];
+    perPage = json['per_page'];
+  }
+
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> data = new Map<String, dynamic>();
+    if (this.result != null) {
+      data['result'] = this.result!.map((v) => v.toJson()).toList();
+    }
+    data['num_pages'] = this.numPages;
+    data['per_page'] = this.perPage;
+    return data;
+  }
+}
 class NHComic {
   String? _id;
   String? _mediaId;
   Title? _title;
-  Images? _images;
+  NHImages? _images;
   String? _scanlator;
   int? _uploadDate;
   List<Tags>? _tags;
@@ -35,7 +60,7 @@ class NHComic {
       {String? id,
       String? mediaId,
       Title? title,
-      Images? images,
+      NHImages? images,
       String? scanlator,
       int? uploadDate,
       List<Tags>? tags,
@@ -76,8 +101,8 @@ class NHComic {
   set mediaId(String? mediaId) => _mediaId = mediaId;
   Title? get title => _title;
   set title(Title? title) => _title = title;
-  Images? get images => _images;
-  set images(Images? images) => _images = images;
+  NHImages? get images => _images;
+  set images(NHImages? images) => _images = images;
   String? get scanlator => _scanlator;
   set scanlator(String? scanlator) => _scanlator = scanlator;
   int? get uploadDate => _uploadDate;
@@ -94,7 +119,7 @@ class NHComic {
     _mediaId = "${json['media_id']}";
     _title = json['title'] != null ? new Title.fromJson(json['title']) : null;
     _images =
-        json['images'] != null ? new Images.fromJson(json['images']) : null;
+        json['images'] != null ? new NHImages.fromJson(json['images']) : null;
     _scanlator = json['scanlator'];
     _uploadDate = json['upload_date'];
     if (json['tags'] != null) {
@@ -167,12 +192,12 @@ class Title {
   }
 }
 
-class Images {
+class NHImages {
   List<Pages>? _pages;
   Pages? _cover;
   Pages? _thumbnail;
 
-  Images({List<Pages>? pages, Pages? cover, Pages? thumbnail}) {
+  NHImages({List<Pages>? pages, Pages? cover, Pages? thumbnail}) {
     if (pages != null) {
       this._pages = pages;
     }
@@ -191,7 +216,7 @@ class Images {
   Pages? get thumbnail => _thumbnail;
   set thumbnail(Pages? thumbnail) => _thumbnail = thumbnail;
 
-  Images.fromJson(Map<String, dynamic> json) {
+  NHImages.fromJson(Map<String, dynamic> json) {
     if (json['pages'] != null) {
       _pages = <Pages>[];
       json['pages'].forEach((v) {

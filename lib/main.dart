@@ -2,13 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:concept_nhv/model.dart';
+import 'package:concept_nhv/model/data_model.dart';
+import 'package:concept_nhv/model/state_model.dart';
 // import 'package:concept_nhv/sample.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -20,6 +22,7 @@ Future<void> main() async {
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider(create: (context) => AppModel()),
+      ChangeNotifierProvider(create: (context) => ComicListModel()),
       ChangeNotifierProvider(create: (context) => CurrentComicModel()),
     ],
     child: MaterialApp.router(
@@ -30,11 +33,115 @@ Future<void> main() async {
             path: '/',
             builder: (context, state) => const FirstScreen(),
           ),
-          GoRoute(
-            path: '/second',
-            builder: (context, state) => const SecondScreen(),
+          // GoRoute(
+          //   path: '/index',
+          //   builder: (context, state) => const IndexScreen(),
+          // ),
+          ShellRoute(
+            builder: (context, state, child) {
+              return Scaffold(
+                body: child,
+                bottomNavigationBar: Consumer<AppModel>(
+                  builder: (context, appModel, child) {
+                    return NavigationBar(
+                      onDestinationSelected: (int index) {
+                        context.goNamed('index');
+                        appModel.navigationIndex = index;
+                        // final actions = {
+                        //   // 1: () => context.read<ComicListModel>().fetchFavorite(),
+                        //   3: () =>
+                        //       context.read<ComicListModel>().fetchCollections(),
+                        // };
+                        // actions[index]?.call();
+
+                        final screens = {
+                          0: () {
+                            context
+                                .read<ComicListModel>()
+                                .fetchIndex(clearComic: true);
+                          },
+                          // 1: () => context.go('/favorites'),
+                          2: () {
+                            context
+                                .read<ComicListModel>()
+                                .fetchSearch('CL-orz', clearComic: true);
+                          },
+                          3: () {
+                            context.read<ComicListModel>().fetchCollections();
+                            // context.go('/collections');
+                          },
+                          // 4: () => context.go('/settings'),
+                        };
+                        screens[index]?.call();
+
+                        debugPrint('debug clicked $index');
+                        HapticFeedback.lightImpact();
+                      },
+                      // indicatorColor: Colors.amber,
+                      selectedIndex: appModel.navigationIndex,
+                      destinations: const <Widget>[
+                        NavigationDestination(
+                          selectedIcon: Icon(Icons.home),
+                          icon: Icon(Icons.home_outlined),
+                          label: 'Home',
+                        ),
+                        NavigationDestination(
+                          selectedIcon: Icon(Icons.favorite),
+                          icon: Icon(Icons.favorite_border),
+                          label: 'Favorites',
+                        ),
+                        NavigationDestination(
+                          selectedIcon: Icon(Icons.search),
+                          icon: Icon(Icons.search_outlined),
+                          label: 'Search',
+                        ),
+                        NavigationDestination(
+                          selectedIcon: Icon(Icons.folder),
+                          icon: Icon(Icons.folder_outlined),
+                          label: 'Collections',
+                        ),
+                        NavigationDestination(
+                          selectedIcon: Icon(Icons.settings),
+                          icon: Icon(Icons.settings_outlined),
+                          label: 'Settings',
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              );
+            },
+            routes: [
+              GoRoute(
+                name: 'index',
+                path: '/index',
+                builder: (context, state) => const IndexScreen(),
+              ),
+              GoRoute(
+                name: 'collection',
+                path: '/collection',
+                builder: (context, state) => const CollectionScreen(),
+              ),
+              // GoRoute(
+              //   path: '/favorites',
+              //   builder: (context, state) => const FavoriteScreen(),
+              // ),
+              // GoRoute(
+              //   path: '/search',
+              //   builder: (context, state) => const IndexScreen(),
+              // ),
+              // GoRoute(
+              //   path: '/collections',
+              //   builder: (context, state) => const CollectionListScreen(),
+              // ),
+              // GoRoute(
+              //   path: '/settings',
+              //   builder: (context, state) => const IndexScreen(),
+              // ),
+            ],
           ),
           GoRoute(
+            name: 'third',
             path: '/third',
             builder: (context, state) => const ThirdScreen(),
           ),
@@ -44,153 +151,150 @@ Future<void> main() async {
   ));
 }
 
-class CurrentComicModel extends ChangeNotifier {
-  NHComic? _currentComic;
+class CollectionScreen extends StatelessWidget {
+  const CollectionScreen({super.key});
 
-  NHComic? get currentComic => _currentComic;
+  @override
+  Widget build(BuildContext context) {
+    Map<String, String> query = GoRouterState.of(context).uri.queryParameters;
+    final collectionName = query['collectionName']!;
 
-  set currentComic(NHComic? value) {
-    _currentComic = value;
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: <Widget>[
+          SliverAppBar(
+            floating: true,
+            snap: true,
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text(collectionName),
+            ),
+          ),
+          FutureBuilder(
+            future: Store.getCollection(collectionName),
+            builder: (BuildContext context, AsyncSnapshot snapshot) {
+              if (!snapshot.hasData) {
+                return SliverList(
+                  delegate: SliverChildListDelegate(
+                    [],
+                  ),
+                );
+              }
 
-    if (_currentComic != null) {
-      final id = _currentComic!.id!;
-      final mid = _currentComic!.mediaId!;
-      final title = _currentComic!.title!.english!;
-      final images = jsonEncode(_currentComic!.images!);
-      final pages = _currentComic!.numPages!;
-      Store.addComic(
-        id: id,
-        mid: mid,
-        title: title,
-        images: images,
-        pages: pages,
-      );
-      Store.collectComic(collectionName: 'History', id: id);
-    }
-  }
+              List<Map<String, Object?>> collectedComics = snapshot.data;
+              for (var comic in collectedComics) {
+                // debugPrint(comic.toString());
+                debugPrint(comic['name'].toString());
+                debugPrint(comic['comicid'].toString());
+                debugPrint(comic['dateCreated'].toString());
+                debugPrint(comic['mid'].toString());
+                debugPrint("---");
+              }
 
-  Map<String, String>? headers;
+              List<ComicCover> favoriteComics = collectedComics.map((e) {
+                var images =
+                    NHImages.fromJson(jsonDecode(e['images'] as String));
+                return ComicCover(
+                  id: e['comicid'] as String,
+                  mediaId: e['mid'] as String,
+                  title: e['title'] as String,
+                  images: images,
+                  pages: e['pages'] as int,
+                  thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+                  thumbnailWidth: images.thumbnail!.w!,
+                  thumbnailHeight: images.thumbnail!.h!,
+                );
+              }).toList();
 
-  Future<void> fetchComic(String id) async {
-    final (agent, token) = await Store.getCFCookie();
-
-    headers = {
-      HttpHeaders.userAgentHeader: agent,
-      HttpHeaders.cookieHeader: "cf_clearance=$token",
-    };
-    final dio = Dio();
-    dio
-        .get('https://nhentai.net/api/gallery/$id',
-            options: Options(headers: headers))
-        .then((response) {
-      print(response);
-      currentComic = NHComic.fromJson(response.data);
-      // _fetchedComics.add(NHList.fromJson(Sample.samplejson));
-      // pageLoaded += _fetchedComics.last.perPage ?? 0;
-      notifyListeners();
-    }).catchError((e) {
-      print(e);
-    });
-
-    // final nhlist = NHList.fromJson(Sample.samplejson);
-  }
-
-  void clearComic() {
-    currentComic = null;
-    notifyListeners();
+              return ComicSliverGrid(
+                comics: favoriteComics,
+                comicsLoaded: favoriteComics.length,
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class AppModel extends ChangeNotifier {
-  final List<NHList> _fetchedComics = [];
+class CollectionListScreen extends StatelessWidget {
+  const CollectionListScreen({super.key});
 
-  // todo 20240211 is exposing $page problematic?
-  int pageLoaded = 1;
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: <Widget>[
+        const SliverAppBar(
+          floating: true,
+          snap: true,
+          flexibleSpace: FlexibleSpaceBar(
+            title: Text('c-nhv'),
+          ),
+        ),
+        Consumer<ComicListModel>(
+          builder: (BuildContext context, ComicListModel comicListModel,
+              Widget? child) {
+            List<Map<String, Object?>> collectedComics =
+                comicListModel.everyCollection;
+            if (collectedComics.isEmpty) {
+              return SliverList(
+                delegate: SliverChildListDelegate(
+                  [
+                    const LinearProgressIndicator(),
+                  ],
+                ),
+              );
+            }
 
-  int _navigationIndex = 0;
+            for (var comic in collectedComics) {
+              // debugPrint(comic.toString());
+              debugPrint(comic['name'].toString());
+              debugPrint(comic['comicid'].toString());
+              debugPrint(comic['dateCreated'].toString());
+              debugPrint(comic['mid'].toString());
+              debugPrint("---");
+            }
 
-  int get navigationIndex => _navigationIndex;
+            final favorite = collectedComics
+                .where((element) => element['name'] == 'Favorite')
+                .toList();
+            final next = collectedComics
+                .where((element) => element['name'] == 'Next')
+                .toList();
+            final history = collectedComics
+                .where((element) => element['name'] == 'History')
+                .toList();
 
-  set navigationIndex(int value) {
-    _navigationIndex = value;
-    notifyListeners();
-  }
+            List<CollectionCover> collections =
+                [favorite, next, history].map((e) {
+              debugPrint("debug1");
+              final firstItem = e.firstOrNull;
+              if (firstItem == null) {
+                debugPrint("debug3 firstItem is null");
+              }
+              final mid = firstItem!['mid'] as String;
+              var images =
+                  NHImages.fromJson(jsonDecode(firstItem['images'] as String));
+              return CollectionCover(
+                mid: mid,
+                collectionName: firstItem['name'] as String,
+                collectedCount: e.length,
+                thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+                thumbnailWidth: images.thumbnail!.w!,
+                thumbnailHeight: images.thumbnail!.h!,
+              );
+            }).toList();
 
-  /// Fetches the index of comics with optional language and popularity filter.
-  ///
-  /// The method fetches the comics from the specified page and applies the
-  /// language and popularity filters if provided. If the request fails more
-  /// than once, it gives up on retrying. In the case of a failure, if the
-  /// language is Chinese, it switches to an alternative Chinese language setting
-  /// and retries the fetch operation.
-  ///
-  /// [page] is the page number to fetch from the API.
-  /// [language] is the language setting for the comics to fetch.
-  /// [sortByPopularType] is the popularity filter, defaults to null.
-  /// [retryCount] keeps track of the number of retries attempted.
-  Future<void> fetchIndex({
-    int page = 1,
-    String? language,
-    String? sortByPopularType = NHPopularType.allTime,
-    int retryCount = 0,
-  }) async {
-    if (retryCount > 1) {
-      debugPrint("fetchIndex retried 2 times, giving up");
-      return;
-    }
-
-    language = language ?? NHLanguage.currentSetting;
-    final (agent, token) = await Store.getCFCookie();
-    var url =
-        "https://nhentai.net/api/galleries/search?query=$language&page=$page";
-    if (sortByPopularType != null) {
-      url += "&sort=$sortByPopularType";
-    }
-
-    final dio = Dio();
-    debugPrint('Loading index: $url');
-    try {
-      final response = await dio.get(url,
-          options: Options(headers: {
-            HttpHeaders.userAgentHeader: agent,
-            HttpHeaders.cookieHeader: "cf_clearance=$token",
-          }));
-      print(response);
-      _fetchedComics.add(NHList.fromJson(response.data));
-      // This call tells the widgets that are listening to this model to rebuild.
-      notifyListeners();
-    } catch (e) {
-      print(e);
-      debugPrint('Loading index failed ($url), retrying...');
-      if (language == NHLanguage.chinese) {
-        language = NHLanguage.chinese2;
-        NHLanguage.currentSetting = language;
-      }
-      fetchIndex(
-        page: page,
-        language: language,
-        sortByPopularType: sortByPopularType,
-        retryCount: retryCount + 1,
-      );
-    }
-
-    pageLoaded = page;
-  }
-
-  int get comicsLoaded {
-    if (_fetchedComics.isEmpty) return 0;
-
-    return _fetchedComics
-        .map((e) => e.perPage ?? 0)
-        .reduce((value, element) => value + element);
-  }
-
-  List<NHComic>? get comics {
-    if (_fetchedComics.isEmpty) return null;
-
-    return _fetchedComics.map((e) => e.result).reduce((value, element) {
-      return [...value!, ...element!];
-    });
+            return CollectionSliverGrid(
+              collections: collections,
+            );
+          },
+        ),
+      ],
+    );
   }
 }
 
@@ -218,12 +322,21 @@ class Store {
   static init() async {
     // uncomment to refresh token, for debug purpose
     // deleteDatabase('database.db');
+    late final path;
+
+    if (Platform.isIOS) {
+      path = join((await getLibraryDirectory()).path, 'database.db');
+    } else {
+      path = join(await getDatabasesPath(), 'database.db');
+    }
+    debugPrint(join((await getLibraryDirectory()).path, 'database.db'));
+    debugPrint(join(await getDatabasesPath(), 'database.db'));
 
     _database = openDatabase(
       // Set the path to the database. Note: Using the `join` function from the
       // `path` package is best practice to ensure the path is correctly
       // constructed for each platform.
-      join(await getDatabasesPath(), 'database.db'),
+      path,
       onCreate: (db, version) async {
         // Run the CREATE TABLE statement on the database.
         await db.execute(
@@ -319,13 +432,23 @@ class Store {
 
     return collectedComics;
   }
+
+  static Future<List<Map<String, Object?>>> getEveryCollection() async {
+    debugPrint("get every collection...");
+    final db = await _database;
+    final List<Map<String, Object?>> collectedComics = await db.rawQuery(
+        "select * from Collection col left join Comic com on col.comicid = com.id order by dateCreated desc");
+
+    return collectedComics;
+  }
 }
 
 class FirstScreen extends StatelessWidget {
   static const platform = MethodChannel('samples.flutter.dev/cookies');
   const FirstScreen({super.key});
 
-  Future<void> receiveCFCookies(controller, AppModel appModel) async {
+  Future<void> receiveCFCookies(
+      controller, Future<void> Function() fetchIndex) async {
     String cookies;
     String? token;
     try {
@@ -344,7 +467,7 @@ class FirstScreen extends StatelessWidget {
     debugPrint(useragent);
 
     await Store.setCFCookie(useragent, token ?? '');
-    await appModel.fetchIndex();
+    await fetchIndex();
   }
 
   @override
@@ -359,10 +482,10 @@ class FirstScreen extends StatelessWidget {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (String url) async {
-            await receiveCFCookies(
-                controller, Provider.of<AppModel>(context, listen: false));
+            await receiveCFCookies(controller,
+                Provider.of<ComicListModel>(context, listen: false).fetchIndex);
             if (!context.mounted) return;
-            context.go('/second');
+            context.go('/index');
           },
         ),
       )
@@ -388,52 +511,12 @@ class FirstScreen extends StatelessWidget {
   }
 }
 
-class SecondScreen extends StatelessWidget {
-  const SecondScreen({super.key});
+class IndexScreen extends StatelessWidget {
+  const IndexScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: const App(),
-      bottomNavigationBar: Consumer<AppModel>(
-        builder: (context, appModel, child) {
-          return NavigationBar(
-            onDestinationSelected: (int index) {
-              appModel.navigationIndex = index;
-            },
-            // indicatorColor: Colors.amber,
-            selectedIndex: appModel.navigationIndex,
-            destinations: const <Widget>[
-              NavigationDestination(
-                selectedIcon: Icon(Icons.home),
-                icon: Icon(Icons.home_outlined),
-                label: 'Home',
-              ),
-              NavigationDestination(
-                selectedIcon: Icon(Icons.favorite),
-                icon: Icon(Icons.favorite_border),
-                label: 'Favorites',
-              ),
-              NavigationDestination(
-                selectedIcon: Icon(Icons.search),
-                icon: Icon(Icons.search_outlined),
-                label: 'Search',
-              ),
-              NavigationDestination(
-                selectedIcon: Icon(Icons.folder),
-                icon: Icon(Icons.folder_outlined),
-                label: 'Collections',
-              ),
-              NavigationDestination(
-                selectedIcon: Icon(Icons.settings),
-                icon: Icon(Icons.settings_outlined),
-                label: 'Settings',
-              ),
-            ],
-          );
-        },
-      ),
-    );
+    return const App();
   }
 }
 
@@ -555,10 +638,21 @@ class _AppState extends State<App> {
           ),
         ),
         [
-          Consumer<AppModel>(
-            builder: (BuildContext context, AppModel appModel, Widget? child) {
+          Consumer<ComicListModel>(
+            builder: (BuildContext context, ComicListModel comicListModel,
+                Widget? child) {
+              if (comicListModel.comics == null) {
+                return SliverList(
+                  delegate: SliverChildListDelegate(
+                    [
+                      const LinearProgressIndicator(),
+                    ],
+                  ),
+                );
+              }
+              
               return ComicSliverGrid(
-                  comics: appModel.comics!
+                  comics: comicListModel.comics!
                       .map((e) => ComicCover(
                             id: e.id!,
                             mediaId: e.mediaId!,
@@ -570,8 +664,8 @@ class _AppState extends State<App> {
                             thumbnailHeight: e.images!.thumbnail!.h!,
                           ))
                       .toList(),
-                  comicsLoaded: appModel.comicsLoaded,
-                  pageLoaded: appModel.pageLoaded);
+                  comicsLoaded: comicListModel.comicsLoaded,
+                  pageLoaded: comicListModel.pageLoaded);
             },
           ),
           FutureBuilder(
@@ -616,26 +710,114 @@ class _AppState extends State<App> {
               );
             },
           ),
+          // SliverList(
+          //   delegate: SliverChildListDelegate(
+          //     [
+          //       const Center(child: Text('Search')),
+          //     ],
+          //   ),
+          // ),
+          Consumer<ComicListModel>(
+            builder: (BuildContext context, ComicListModel comicListModel,
+                Widget? child) {
+              if (comicListModel.comics == null) {
+                return SliverList(
+                  delegate: SliverChildListDelegate(
+                    [
+                      const LinearProgressIndicator(),
+                    ],
+                  ),
+                );
+              }
+
+              return ComicSliverGrid(
+                  comics: comicListModel.comics!
+                      .map((e) => ComicCover(
+                            id: e.id!,
+                            mediaId: e.mediaId!,
+                            title: e.title!.english!,
+                            images: e.images!,
+                            pages: e.numPages!,
+                            thumbnailExt: App.extMap[e.images!.thumbnail!.t!]!,
+                            thumbnailWidth: e.images!.thumbnail!.w!,
+                            thumbnailHeight: e.images!.thumbnail!.h!,
+                          ))
+                      .toList(),
+                  comicsLoaded: comicListModel.comicsLoaded,
+                  pageLoaded: comicListModel.pageLoaded);
+            },
+          ),
+          Consumer<ComicListModel>(
+            builder: (BuildContext context, ComicListModel comicListModel,
+                Widget? child) {
+              List<Map<String, Object?>> collectedComics =
+                  comicListModel.everyCollection;
+              if (collectedComics.isEmpty) {
+                return SliverList(
+                  delegate: SliverChildListDelegate(
+                    [
+                      const LinearProgressIndicator(),
+                    ],
+                  ),
+                );
+              }
+
+              for (var comic in collectedComics) {
+                // debugPrint(comic.toString());
+                debugPrint(comic['name'].toString());
+                debugPrint(comic['comicid'].toString());
+                debugPrint(comic['dateCreated'].toString());
+                debugPrint(comic['mid'].toString());
+                debugPrint("---");
+              }
+
+              final favorite = collectedComics
+                  .where((element) => element['name'] == 'Favorite')
+                  .toList();
+              final next = collectedComics
+                  .where((element) => element['name'] == 'Next')
+                  .toList();
+              final history = collectedComics
+                  .where((element) => element['name'] == 'History')
+                  .toList();
+
+              List<CollectionCover> collections =
+                  [favorite, next, history].map((e) {
+                debugPrint("debug1");
+                final firstItem = e.firstOrNull;
+                if (firstItem == null) {
+                  debugPrint("debug3 firstItem is null");
+                }
+                final mid = firstItem!['mid'] as String;
+                var images = NHImages.fromJson(
+                    jsonDecode(firstItem['images'] as String));
+                return CollectionCover(
+                  mid: mid,
+                  collectionName: firstItem['name'] as String,
+                  collectedCount: e.length,
+                  thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+                  thumbnailWidth: images.thumbnail!.w!,
+                  thumbnailHeight: images.thumbnail!.h!,
+                );
+              }).toList();
+
+              return CollectionSliverGrid(
+                collections: collections,
+              );
+            },
+          ),
           SliverList(
             delegate: SliverChildListDelegate(
               [
-                const Center(child: Text('Search')),
-                // Container(
-                //   child: WebViewWidget(controller: controller),
-                //   height: 300,
-                // ),
+                const Center(child: Text('Settings')),
               ],
             ),
-          ),
-          // ComicSliverGrid(
-          //     comics: appModel.comics,
-          //     comicsLoaded: appModel.comicsLoaded,
-          //     pageLoaded: appModel.pageLoaded),
+          )
         ][Provider.of<AppModel>(context).navigationIndex],
+        // ][0],
       ],
     );
   }
-
 }
 
 class ComicSliverGrid extends StatelessWidget {
@@ -663,7 +845,7 @@ class ComicSliverGrid extends StatelessWidget {
           final comic = comics![index];
           if (pageLoaded != null && index + 1 == comicsLoaded) {
             debugPrint('Loading more... page: ${pageLoaded! + 1}');
-            Provider.of<AppModel>(context, listen: false)
+            Provider.of<ComicListModel>(context, listen: false)
                 .fetchIndex(page: pageLoaded! + 1);
           }
           debugPrint("index: $index");
@@ -683,27 +865,30 @@ class ComicSliverGrid extends StatelessWidget {
 
           return Column(
             children: [
-              Card(
-                // clipBehavior is necessary because, without it, the InkWell's animation
-                // will extend beyond the rounded edges of the [Card] (see https://github.com/flutter/flutter/issues/109776)
-                // This comes with a small performance cost, and you should not set [clipBehavior]
-                // unless you need it.
-                clipBehavior: Clip.hardEdge,
-                child: InkWell(
-                  splashColor: Colors.blue.withAlpha(30),
-                  onTap: () async {
-                    Provider.of<CurrentComicModel>(context, listen: false)
-                        .fetchComic(id);
-                    await context.push(
-                        Uri(path: '/third', queryParameters: {'id': id})
-                            .toString());
-                    Provider.of<CurrentComicModel>(context, listen: false)
-                        .clearComic();
-                  },
-                  child: SimpleCachedNetworkImage(
-                    url: thumbnailLink,
-                    width: thumbnailWidth,
-                    height: thumbnailHeight,
+              Expanded(
+                child: Card(
+                  // clipBehavior is necessary because, without it, the InkWell's animation
+                  // will extend beyond the rounded edges of the [Card] (see https://github.com/flutter/flutter/issues/109776)
+                  // This comes with a small performance cost, and you should not set [clipBehavior]
+                  // unless you need it.
+                  clipBehavior: Clip.hardEdge,
+                  child: InkWell(
+                    splashColor: Colors.blue.withAlpha(30),
+                    onTap: () async {
+                      Provider.of<CurrentComicModel>(context, listen: false)
+                          .fetchComic(id);
+                      context
+                          .push(Uri(path: '/third', queryParameters: {'id': id})
+                              .toString())
+                          .then((_) => Provider.of<CurrentComicModel>(context,
+                                  listen: false)
+                              .clearComic());
+                    },
+                    child: SimpleCachedNetworkImage(
+                      url: thumbnailLink,
+                      width: thumbnailWidth,
+                      height: thumbnailHeight,
+                    ),
                   ),
                 ),
               ),
@@ -755,6 +940,88 @@ class ComicSliverGrid extends StatelessWidget {
   }
 }
 
+class CollectionSliverGrid extends StatelessWidget {
+  final List<CollectionCover> collections;
+
+  const CollectionSliverGrid({
+    super.key,
+    required this.collections,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 180.0,
+        mainAxisExtent: 300,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (BuildContext context, int index) {
+          final collection = collections[index];
+          debugPrint("index: $index");
+          // if (nhlist == null) return Container();
+          final collectionName = collection.collectionName;
+          final collectedCount = collection.collectedCount;
+          final thumbnailWidth = collection.thumbnailWidth;
+          final thumbnailHeight = collection.thumbnailHeight;
+          final thumbnailLink = collection.thumbnailLink;
+          debugPrint(thumbnailLink);
+
+          return Column(
+            children: [
+              Expanded(
+                child: Card(
+                  // clipBehavior is necessary because, without it, the InkWell's animation
+                  // will extend beyond the rounded edges of the [Card] (see https://github.com/flutter/flutter/issues/109776)
+                  // This comes with a small performance cost, and you should not set [clipBehavior]
+                  // unless you need it.
+                  clipBehavior: Clip.hardEdge,
+                  child: InkWell(
+                    splashColor: Colors.blue.withAlpha(30),
+                    onTap: () async {
+                      // Provider.of<CurrentComicModel>(context, listen: false)
+                      //     .fetchComic(id);
+                      // await context.push(
+                      //     Uri(path: '/third', queryParameters: {'id': id})
+                      //         .toString());
+                      // Provider.of<CurrentComicModel>(context, listen: false)
+                      //     .clearComic();
+                      context.push(
+                        Uri(path: '/collection', queryParameters: {
+                          'collectionName': collectionName
+                        }).toString(),
+                      );
+
+                      debugPrint('debug clicked $collectionName');
+                    },
+                    child: SimpleCachedNetworkImage(
+                      url: thumbnailLink,
+                      width: thumbnailWidth,
+                      height: thumbnailHeight,
+                    ),
+                  ),
+                ),
+              ),
+              Text(
+                collectionName,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("$collectedCount collected"),
+                ],
+              )
+            ],
+          );
+        },
+        childCount: 3,
+      ),
+    );
+  }
+}
+
 class ComicCover {
   final String id;
   final String mediaId;
@@ -780,5 +1047,33 @@ class ComicCover {
   @override
   String toString() {
     return 'ComicCover{id: $id, mediaId: $mediaId, title: $title, images: $images, numPages: $pages}';
+  }
+}
+
+class CollectionCover {
+  final String mid;
+  final String collectionName;
+  final int collectedCount;
+
+  final String thumbnailExt;
+  final int thumbnailWidth;
+  final int thumbnailHeight;
+
+  String get thumbnailLink {
+    return "https://t.nhentai.net/galleries/$mid/thumb.$thumbnailExt";
+  }
+
+  CollectionCover({
+    required this.collectionName,
+    required this.collectedCount,
+    required this.thumbnailExt,
+    required this.thumbnailWidth,
+    required this.thumbnailHeight,
+    required this.mid,
+  });
+
+  @override
+  String toString() {
+    return 'CollectionCover{collectionName: $collectionName, collectedCount: $collectedCount}';
   }
 }

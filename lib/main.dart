@@ -56,18 +56,29 @@ Future<void> main() async {
 
                         final screens = {
                           0: () {
+                            context.read<AppModel>().isLoading = true;
                             context
                                 .read<ComicListModel>()
-                                .fetchIndex(clearComic: true);
+                                .fetchIndex(clearComic: true)
+                                .then((value) =>
+                                    context.read<AppModel>().isLoading = false);
                           },
                           // 1: () => context.go('/favorites'),
                           2: () {
+                            context.read<AppModel>().isLoading = true;
                             context
                                 .read<ComicListModel>()
-                                .fetchSearch('CL-orz', clearComic: true);
+                                .fetchSearch('CL-orz', clearComic: true)
+                                .then((value) =>
+                                    context.read<AppModel>().isLoading = false);
                           },
                           3: () {
-                            context.read<ComicListModel>().fetchCollections();
+                            context.read<AppModel>().isLoading = true;
+                            context
+                                .read<ComicListModel>()
+                                .fetchCollections()
+                                .then((value) =>
+                                    context.read<AppModel>().isLoading = false);
                             // context.go('/collections');
                           },
                           // 4: () => context.go('/settings'),
@@ -243,7 +254,7 @@ class CollectionListScreen extends StatelessWidget {
               return SliverList(
                 delegate: SliverChildListDelegate(
                   [
-                    const LinearProgressIndicator(),
+                    // const LinearProgressIndicator(),
                   ],
                 ),
               );
@@ -396,7 +407,7 @@ class Store {
     );
   }
 
-  //todo 20240218 use enum for collection name
+  // todo 20240218 use enum for collection name
   static Future<int> collectComic({
     required String collectionName,
     required String id,
@@ -630,12 +641,17 @@ class _AppState extends State<App> {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: <Widget>[
-        const SliverAppBar(
-          floating: true,
-          snap: true,
-          flexibleSpace: FlexibleSpaceBar(
-            title: Text('c-nhv'),
-          ),
+        Consumer<AppModel>(
+          builder: (BuildContext context, AppModel appModel, Widget? child) {
+            return SliverAppBar(
+              floating: true,
+              snap: true,
+              flexibleSpace: const FlexibleSpaceBar(
+                title: Text('c-nhv'),
+              ),
+              bottom: showLoadingIfNeeded(appModel.isLoading),
+            );
+          },
         ),
         [
           Consumer<ComicListModel>(
@@ -645,12 +661,12 @@ class _AppState extends State<App> {
                 return SliverList(
                   delegate: SliverChildListDelegate(
                     [
-                      const LinearProgressIndicator(),
+                      // const LinearProgressIndicator(),
                     ],
                   ),
                 );
               }
-              
+
               return ComicSliverGrid(
                   comics: comicListModel.comics!
                       .map((e) => ComicCover(
@@ -724,7 +740,7 @@ class _AppState extends State<App> {
                 return SliverList(
                   delegate: SliverChildListDelegate(
                     [
-                      const LinearProgressIndicator(),
+                      // const LinearProgressIndicator(),
                     ],
                   ),
                 );
@@ -743,7 +759,7 @@ class _AppState extends State<App> {
                             thumbnailHeight: e.images!.thumbnail!.h!,
                           ))
                       .toList(),
-                  comicsLoaded: comicListModel.comicsLoaded,
+                  comicsLoaded: comicListModel.comics!.length,
                   pageLoaded: comicListModel.pageLoaded);
             },
           ),
@@ -756,7 +772,7 @@ class _AppState extends State<App> {
                 return SliverList(
                   delegate: SliverChildListDelegate(
                     [
-                      const LinearProgressIndicator(),
+                      // const LinearProgressIndicator(),
                     ],
                   ),
                 );
@@ -818,6 +834,17 @@ class _AppState extends State<App> {
       ],
     );
   }
+
+  // todo 20240227 show arc search like 'loading' animation instead, an overlay at the top of screen
+  PreferredSizeWidget? showLoadingIfNeeded(bool isLoading) {
+    if (isLoading) {
+      return const PreferredSize(
+        preferredSize: Size(double.infinity, 4.0),
+        child: LinearProgressIndicator(),
+      );
+    }
+    return null;
+  }
 }
 
 class ComicSliverGrid extends StatelessWidget {
@@ -843,10 +870,16 @@ class ComicSliverGrid extends StatelessWidget {
       delegate: SliverChildBuilderDelegate(
         (BuildContext context, int index) {
           final comic = comics![index];
-          if (pageLoaded != null && index + 1 == comicsLoaded) {
+          final noMorePage =
+              Provider.of<ComicListModel>(context, listen: false).noMorePage;
+          if (!noMorePage && pageLoaded != null && index + 1 == comicsLoaded) {
             debugPrint('Loading more... page: ${pageLoaded! + 1}');
+            // todo 20240227 cannot update isLoading (global state) during build(), design how to show user that it is "loading"
+            // Provider.of<AppModel>(context, listen: false).isLoading = true;
             Provider.of<ComicListModel>(context, listen: false)
-                .fetchIndex(page: pageLoaded! + 1);
+                .fetchPage(page: pageLoaded! + 1)
+                .then((value) => Provider.of<AppModel>(context, listen: false)
+                    .isLoading = false);
           }
           debugPrint("index: $index");
           // if (nhlist == null) return Container();

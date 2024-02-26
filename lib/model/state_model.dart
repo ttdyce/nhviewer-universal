@@ -10,9 +10,16 @@ class AppModel extends ChangeNotifier {
   int _navigationIndex = 0;
 
   int get navigationIndex => _navigationIndex;
-
   set navigationIndex(int value) {
     _navigationIndex = value;
+    notifyListeners();
+  }
+
+  bool _isLoading = false;
+
+  bool get isLoading => _isLoading;
+  set isLoading(bool value) {
+    _isLoading = value;
     notifyListeners();
   }
 }
@@ -23,6 +30,11 @@ class ComicListModel extends ChangeNotifier {
 
   // todo 20240211 is exposing $page problematic?
   int pageLoaded = 1;
+  bool _noMorePage = false;
+
+  bool get noMorePage => _noMorePage;
+
+  Function? _fetchPage;
 
   /// Fetches the index of comics with optional language and popularity filter.
   ///
@@ -68,10 +80,17 @@ class ComicListModel extends ChangeNotifier {
             HttpHeaders.userAgentHeader: agent,
             HttpHeaders.cookieHeader: "cf_clearance=$token",
           }));
+      final freshComics = NHList.fromJson(response.data);
       print(response);
-      _fetchedComics.add(NHList.fromJson(response.data));
+      _fetchedComics.add(freshComics);
       // This call tells the widgets that are listening to this model to rebuild.
       notifyListeners();
+      _fetchPage = (p) => fetchIndex(
+            page: p,
+            language: language,
+            sortByPopularType: sortByPopularType,
+          );
+      _noMorePage = freshComics.result?.isEmpty ?? true;
     } catch (e) {
       print(e);
       debugPrint('Loading index failed ($url), retrying...');
@@ -125,7 +144,7 @@ class ComicListModel extends ChangeNotifier {
     }
 
     if (retryCount > 1) {
-      debugPrint("fetchIndex retried 2 times, giving up");
+      debugPrint("fetchSearch retried 2 times, giving up");
       return;
     }
 
@@ -138,20 +157,29 @@ class ComicListModel extends ChangeNotifier {
     }
 
     final dio = Dio();
-    debugPrint('Loading index: $url');
+    debugPrint('Loading search: $url');
     try {
       final response = await dio.get(url,
           options: Options(headers: {
             HttpHeaders.userAgentHeader: agent,
             HttpHeaders.cookieHeader: "cf_clearance=$token",
           }));
+      final freshComics = NHList.fromJson(response.data);
       print(response);
-      _fetchedComics.add(NHList.fromJson(response.data));
+      _fetchedComics.add(freshComics);
+      // todo 20240227 it is known that when reaching last page (when freshComics is empty, i.e. {"result":[],"num_pages":2,"per_page":25}), it is rebuilding one more time. Tiny performance issue
       // This call tells the widgets that are listening to this model to rebuild.
       notifyListeners();
+      _fetchPage = (p) => fetchSearch(
+            q,
+            page: p,
+            language: language,
+            sortByPopularType: sortByPopularType,
+          );
+      _noMorePage = freshComics.result?.isEmpty ?? true;
     } catch (e) {
       print(e);
-      debugPrint('Loading index failed ($url), retrying...');
+      debugPrint('Loading search failed ($url), retrying...');
       if (language == NHLanguage.chinese) {
         language = NHLanguage.chinese2;
         NHLanguage.currentSetting = language;
@@ -167,6 +195,8 @@ class ComicListModel extends ChangeNotifier {
 
     pageLoaded = page;
   }
+
+  Future<void> fetchPage({required int page}) => _fetchPage?.call(page);
 }
 
 class CurrentComicModel extends ChangeNotifier {

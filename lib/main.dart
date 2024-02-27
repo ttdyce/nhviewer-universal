@@ -46,7 +46,6 @@ Future<void> main() async {
                     return NavigationBar(
                       onDestinationSelected: (int index) {
                         context.goNamed('index');
-                        appModel.navigationIndex = index;
                         // final actions = {
                         //   // 1: () => context.read<ComicListModel>().fetchFavorite(),
                         //   3: () =>
@@ -56,6 +55,7 @@ Future<void> main() async {
 
                         final screens = {
                           0: () {
+                            appModel.navigationIndex = index;
                             context.read<AppModel>().isLoading = true;
                             context
                                 .read<ComicListModel>()
@@ -63,16 +63,46 @@ Future<void> main() async {
                                 .then((value) =>
                                     context.read<AppModel>().isLoading = false);
                           },
-                          // 1: () => context.go('/favorites'),
+                          1: () {
+                            appModel.navigationIndex = index;
+                            // context.go('/favorites');
+                          },
                           2: () {
-                            context.read<AppModel>().isLoading = true;
-                            context
-                                .read<ComicListModel>()
-                                .fetchSearch('CL-orz', clearComic: true)
-                                .then((value) =>
-                                    context.read<AppModel>().isLoading = false);
+                            // context.read<AppModel>().isLoading = true;
+                            // context
+                            //     .read<ComicListModel>()
+                            //     .fetchSearch('CL-orz', clearComic: true)
+                            //     .then((value) =>
+                            //         context.read<AppModel>().isLoading = false);
+                            // handle on showDialog cancel
+                            showDialog(
+                                context: context,
+                                builder: (context) {
+                                  return AlertDialog(
+                                    title: const Text('Search'),
+                                    content: TextField(
+                                      autofocus: true,
+                                      onSubmitted: (value) {
+                                        appModel.navigationIndex = index;
+
+                                        context.read<AppModel>().isLoading =
+                                            true;
+                                        context
+                                            .read<ComicListModel>()
+                                            .fetchSearch(value,
+                                                clearComic: true)
+                                            .then((value) => context
+                                                .read<AppModel>()
+                                                .isLoading = false);
+
+                                        Navigator.of(context).pop();
+                                      },
+                                    ),
+                                  );
+                                });
                           },
                           3: () {
+                            appModel.navigationIndex = index;
                             context.read<AppModel>().isLoading = true;
                             context
                                 .read<ComicListModel>()
@@ -81,7 +111,10 @@ Future<void> main() async {
                                     context.read<AppModel>().isLoading = false);
                             // context.go('/collections');
                           },
-                          // 4: () => context.go('/settings'),
+                          4: () {
+                            appModel.navigationIndex = index;
+                            // context.go('/settings');
+                          },
                         };
                         screens[index]?.call();
 

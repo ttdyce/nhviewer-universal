@@ -677,12 +677,54 @@ class _AppState extends State<App> {
         Consumer<AppModel>(
           builder: (BuildContext context, AppModel appModel, Widget? child) {
             return SliverAppBar(
-              floating: true,
+              // clipBehavior: Clip.none,
+              // shape: const StadiumBorder(),
+              scrolledUnderElevation: 0.0,
+              // titleSpacing: 0.0,
+              backgroundColor: Colors.transparent,
+              floating:
+                  true, // We can also uncomment this line and set `pinned` to true to see a pinned search bar.
               snap: true,
-              flexibleSpace: const FlexibleSpaceBar(
-                title: Text('c-nhv'),
-              ),
               bottom: showLoadingIfNeeded(appModel.isLoading),
+              title: SearchAnchor.bar(
+                // barPadding: const MaterialStatePropertyAll<EdgeInsets>(EdgeInsets.symmetric(horizontal: 160, vertical: 0)),
+                barTrailing: [
+                  IconButton(
+                    onPressed: () {},
+                    icon: ClipOval(
+                      child: CachedNetworkImage(
+                        // echo -n "someemail@email.com" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | openssl dgst -sha256
+                        imageUrl:
+                            "https://www.gravatar.com/avatar/b004c065bc529e98545e27af859152bb74007e535f2c149284117cfb520e76d6?d=retro&f=y",
+                      ),
+                    ),
+                  )
+                ],
+                // barLeading: IconButton(
+                //   onPressed: () {},
+                //   icon: const Icon(Icons.search, color: Colors.black),
+                // ),
+                barHintText: "Search comic",
+                barHintStyle: MaterialStateProperty.all(
+                  const TextStyle(color: Colors.grey),
+                ),
+                viewHeaderHintStyle: const TextStyle(color: Colors.grey),
+                barLeading: const Icon(Icons.search, color: Colors.black),
+                barElevation: MaterialStateProperty.all(0),
+                searchController: SearchController(),
+                suggestionsBuilder:
+                    (BuildContext context, SearchController controller) {
+                  return List<Widget>.generate(
+                    5,
+                    (int index) {
+                      return ListTile(
+                        titleAlignment: ListTileTitleAlignment.center,
+                        title: Text('Initial list item $index'),
+                      );
+                    },
+                  );
+                },
+              ),
             );
           },
         ),

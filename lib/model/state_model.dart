@@ -8,10 +8,14 @@ import 'package:flutter/material.dart';
 
 class AppModel extends ChangeNotifier {
   int _navigationIndex = 0;
+  final searchController = SearchController();
 
   int get navigationIndex => _navigationIndex;
   set navigationIndex(int value) {
     _navigationIndex = value;
+    if (value != 2) {
+      searchController.text = '';
+    }
     notifyListeners();
   }
 

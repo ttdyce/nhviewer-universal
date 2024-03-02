@@ -6,8 +6,10 @@ import 'package:concept_nhv/model/data_model.dart';
 import 'package:concept_nhv/model/state_model.dart';
 // import 'package:concept_nhv/sample.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -26,7 +28,7 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (context) => CurrentComicModel()),
     ],
     child: MaterialApp.router(
-      // theme: ThemeData(useMaterial3: true),
+      theme: ThemeData.light(useMaterial3: true),
       routerConfig: GoRouter(
         routes: [
           GoRoute(
@@ -349,8 +351,9 @@ class NHLanguage {
   static const japanese = 'language:japanese';
   static const english = 'language:english';
   static const all = '-';
+  static const all2 = 'language:-';
 
-  static var currentSetting = chinese;
+  static var currentSetting = japanese;
 }
 
 class NHPopularType {
@@ -669,6 +672,7 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
+
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
@@ -677,9 +681,9 @@ class _AppState extends State<App> {
         Consumer<AppModel>(
           builder: (BuildContext context, AppModel appModel, Widget? child) {
             return SliverAppBar(
-              // clipBehavior: Clip.none,
+              clipBehavior: Clip.none,
               // shape: const StadiumBorder(),
-              scrolledUnderElevation: 0.0,
+              // scrolledUnderElevation: 0.0,
               // titleSpacing: 0.0,
               backgroundColor: Colors.transparent,
               floating:
@@ -688,30 +692,48 @@ class _AppState extends State<App> {
               bottom: showLoadingIfNeeded(appModel.isLoading),
               title: SearchAnchor.bar(
                 // barPadding: const MaterialStatePropertyAll<EdgeInsets>(EdgeInsets.symmetric(horizontal: 160, vertical: 0)),
+                searchController: appModel.searchController,
+                onSubmitted: (value) {
+                  appModel.searchController.closeView(value);
+                  appModel.navigationIndex = 2;
+
+                  context.read<AppModel>().isLoading = true;
+                  context
+                      .read<ComicListModel>()
+                      .fetchSearch(value, clearComic: true)
+                      .then((value) =>
+                          context.read<AppModel>().isLoading = false);
+
+                  // Navigator.of(context).pop();
+                },
                 barTrailing: [
-                  IconButton(
+                  // todo 20240302 remove splash effect? like gmail thing
+                  IconButton.filledTonal(
                     onPressed: () {},
                     icon: ClipOval(
                       child: CachedNetworkImage(
-                        // echo -n "someemail@email.com" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | openssl dgst -sha256
+                        // get hash in the url: echo -n "someemail@email.com" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | openssl dgst -sha256
                         imageUrl:
                             "https://www.gravatar.com/avatar/b004c065bc529e98545e27af859152bb74007e535f2c149284117cfb520e76d6?d=retro&f=y",
+                        placeholder: (context, url) => Icon(
+                          Icons.person,
+                          color: Colors.grey.shade300,
+                        ),
+                        height: IconTheme.of(context).size ?? 24,
                       ),
                     ),
-                  )
+                  ),
+                  // IconButton(
+                  //   onPressed: () {},
+                  //   icon: const Icon(Icons.more_vert, color: Colors.black),
+                  // )
                 ],
                 // barLeading: IconButton(
                 //   onPressed: () {},
                 //   icon: const Icon(Icons.search, color: Colors.black),
                 // ),
                 barHintText: "Search comic",
-                barHintStyle: MaterialStateProperty.all(
-                  const TextStyle(color: Colors.grey),
-                ),
-                viewHeaderHintStyle: const TextStyle(color: Colors.grey),
-                barLeading: const Icon(Icons.search, color: Colors.black),
                 barElevation: MaterialStateProperty.all(0),
-                searchController: SearchController(),
                 suggestionsBuilder:
                     (BuildContext context, SearchController controller) {
                   return List<Widget>.generate(
@@ -720,6 +742,7 @@ class _AppState extends State<App> {
                       return ListTile(
                         titleAlignment: ListTileTitleAlignment.center,
                         title: Text('Initial list item $index'),
+                        onTap: () {},
                       );
                     },
                   );

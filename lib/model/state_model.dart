@@ -35,8 +35,14 @@ class ComicListModel extends ChangeNotifier {
   // todo 20240211 is exposing $page problematic?
   int pageLoaded = 1;
   bool _noMorePage = false;
-
   bool get noMorePage => _noMorePage;
+  String? _sortByPopularType;
+
+  String? get sortByPopularType => _sortByPopularType;
+
+  set sortByPopularType(String? value) {
+    _sortByPopularType = value;
+  }
 
   Function? _fetchPage;
 
@@ -55,7 +61,8 @@ class ComicListModel extends ChangeNotifier {
   Future<void> fetchIndex({
     int page = 1,
     String? language,
-    String? sortByPopularType = NHPopularType.allTime,
+    // String? sortByPopularType = NHPopularType.allTime,
+    String? sortByPopularType,
     int retryCount = 0,
     bool clearComic = false,
   }) async {
@@ -63,8 +70,8 @@ class ComicListModel extends ChangeNotifier {
       _fetchedComics.clear();
     }
 
-    if (retryCount > 1) {
-      debugPrint("fetchIndex retried 2 times, giving up");
+    if (retryCount > NHLanguage.chineseWorkaround.length) {
+      debugPrint("fetchIndex retried $retryCount times, giving up");
       return;
     }
 
@@ -73,7 +80,10 @@ class ComicListModel extends ChangeNotifier {
     var url =
         "https://nhentai.net/api/galleries/search?query=$language&page=$page";
     if (sortByPopularType != null) {
+      _sortByPopularType = sortByPopularType;
       url += "&sort=$sortByPopularType";
+    } else if (this.sortByPopularType != null) {
+      url += "&sort=${this.sortByPopularType}";
     }
 
     final dio = Dio();
@@ -84,29 +94,39 @@ class ComicListModel extends ChangeNotifier {
             HttpHeaders.userAgentHeader: agent,
             HttpHeaders.cookieHeader: "cf_clearance=$token",
           }));
-      final freshComics = NHList.fromJson(response.data);
       print(response);
-      _fetchedComics.add(freshComics);
+      final freshComics = NHList.fromJson(response.data);
+      _noMorePage = freshComics.result?.isEmpty ?? true;
+      if (!_noMorePage) {
+        _fetchedComics.add(freshComics);
+      }
       // This call tells the widgets that are listening to this model to rebuild.
       notifyListeners();
-      _fetchPage = (p) => fetchIndex(
+      _fetchPage = (p, clearComic) => fetchIndex(
             page: p,
             language: language,
             sortByPopularType: sortByPopularType,
+            retryCount: retryCount,
+            clearComic: clearComic,
           );
-      _noMorePage = freshComics.result?.isEmpty ?? true;
-    } catch (e) {
-      print(e);
-      debugPrint('Loading index failed ($url), retrying...');
-      if (language == NHLanguage.chinese) {
-        language = NHLanguage.chinese2;
+    } on DioException catch (e) {
+      // workaround for sometimes 404 error returned for chinese
+      debugPrint(
+          "fetchIndex DioException, status code = ${e.response?.statusCode}");
+      debugPrint('fetchIndex failed ($url), retrying...');
+      if ([NHLanguage.chinese, ...NHLanguage.chineseWorkaround]
+          .contains(language)) {
+        debugPrint(
+            'Trying different language query from $language to ${NHLanguage.chineseWorkaround[retryCount]}');
+        language = NHLanguage.chineseWorkaround[retryCount];
         NHLanguage.currentSetting = language;
       }
       fetchIndex(
-        page: page,
+        page: 1,
         language: language,
         sortByPopularType: sortByPopularType,
         retryCount: retryCount + 1,
+        clearComic: true,
       );
     }
 
@@ -129,8 +149,6 @@ class ComicListModel extends ChangeNotifier {
     });
   }
 
-  // fetchFavorite() {}
-
   fetchCollections() async {
     everyCollection.clear();
     everyCollection.addAll(await Store.getEveryCollection());
@@ -140,15 +158,15 @@ class ComicListModel extends ChangeNotifier {
   fetchSearch(String q,
       {int page = 1,
       String? language,
-      String? sortByPopularType = NHPopularType.allTime,
+      String? sortByPopularType,
       int retryCount = 0,
       bool clearComic = false}) async {
     if (clearComic) {
       _fetchedComics.clear();
     }
 
-    if (retryCount > 1) {
-      debugPrint("fetchSearch retried 2 times, giving up");
+    if (retryCount > NHLanguage.chineseWorkaround.length) {
+      debugPrint("fetchSearch retried $retryCount times, giving up");
       return;
     }
 
@@ -157,7 +175,10 @@ class ComicListModel extends ChangeNotifier {
     var url =
         "https://nhentai.net/api/galleries/search?query=$q%20$language&page=$page";
     if (sortByPopularType != null) {
+      _sortByPopularType = sortByPopularType;
       url += "&sort=$sortByPopularType";
+    } else if (this.sortByPopularType != null) {
+      url += "&sort=${this.sortByPopularType}";
     }
 
     final dio = Dio();
@@ -168,24 +189,25 @@ class ComicListModel extends ChangeNotifier {
             HttpHeaders.userAgentHeader: agent,
             HttpHeaders.cookieHeader: "cf_clearance=$token",
           }));
-      final freshComics = NHList.fromJson(response.data);
       print(response);
-      _fetchedComics.add(freshComics);
+      final freshComics = NHList.fromJson(response.data);
+      _noMorePage = freshComics.result?.isEmpty ?? true;
+      if (!_noMorePage) {
+        _fetchedComics.add(freshComics);
+      }
       // todo 20240227 it is known that when reaching last page (when freshComics is empty, i.e. {"result":[],"num_pages":2,"per_page":25}), it is rebuilding one more time. Tiny performance issue
       // This call tells the widgets that are listening to this model to rebuild.
       notifyListeners();
-      _fetchPage = (p) => fetchSearch(
-            q,
-            page: p,
-            language: language,
-            sortByPopularType: sortByPopularType,
-          );
-      _noMorePage = freshComics.result?.isEmpty ?? true;
+      _fetchPage = (p, clearComic) => fetchSearch(q,
+          page: p,
+          language: language,
+          sortByPopularType: sortByPopularType,
+          clearComic: clearComic);
     } catch (e) {
       print(e);
       debugPrint('Loading search failed ($url), retrying...');
       if (language == NHLanguage.chinese) {
-        language = NHLanguage.chinese2;
+        language = NHLanguage.chineseWorkaround[retryCount];
         NHLanguage.currentSetting = language;
       }
       fetchSearch(
@@ -200,7 +222,10 @@ class ComicListModel extends ChangeNotifier {
     pageLoaded = page;
   }
 
-  Future<void> fetchPage({required int page}) => _fetchPage?.call(page);
+  Future<void> fetchPage({int? page}) {
+    if (page == null) return _fetchPage?.call(1, true);
+    return _fetchPage?.call(page, false);
+  }
 }
 
 class CurrentComicModel extends ChangeNotifier {

@@ -43,6 +43,24 @@ Future<void> main() async {
             builder: (context, state, child) {
               return Scaffold(
                 body: child,
+                floatingActionButton: FloatingActionButton(
+                  onPressed: () {
+                    final sortByPopularType =
+                        context.read<ComicListModel>().sortByPopularType;
+                    if (sortByPopularType == null) {
+                      context.read<ComicListModel>().sortByPopularType =
+                          NHPopularType.month;
+                    } else {
+                      context.read<ComicListModel>().sortByPopularType = null;
+                    }
+                    context.read<AppModel>().isLoading = true;
+                    // await context.read<ComicListModel>().fetchPage();
+                    // context.read<AppModel>().isLoading = false;
+                    context.read<ComicListModel>().fetchPage().then(
+                        (value) => context.read<AppModel>().isLoading = false);
+                  },
+                  child: const Icon(Icons.sort),
+                ),
                 bottomNavigationBar: Consumer<AppModel>(
                   builder: (context, appModel, child) {
                     return NavigationBar(
@@ -347,13 +365,17 @@ class CollectionListScreen extends StatelessWidget {
 class NHLanguage {
   static const chinese = 'language:chinese';
   // 20240215 workaround: sometimes lanugage tag 'chinese' returns 404 (error: does not exist)
-  static const chinese2 = '中国';
+  static const chineseWorkaround = [
+    '-language:english -language:japanese',
+    '汉化',
+    '中国'
+  ];
   static const japanese = 'language:japanese';
   static const english = 'language:english';
   static const all = '-';
   static const all2 = 'language:-';
 
-  static var currentSetting = japanese;
+  static var currentSetting = chinese;
 }
 
 class NHPopularType {
@@ -672,10 +694,13 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
-
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
+      // controller: ScrollController()
+      //   ..addListener(() {
+      //     debugPrint('scrolling');
+      //   }),
       physics: const BouncingScrollPhysics(),
       slivers: <Widget>[
         Consumer<AppModel>(
@@ -968,16 +993,36 @@ class ComicSliverGrid extends StatelessWidget {
       delegate: SliverChildBuilderDelegate(
         (BuildContext context, int index) {
           final comic = comics![index];
+          final reachLastItem = index + 1 == comicsLoaded;
           final noMorePage =
               Provider.of<ComicListModel>(context, listen: false).noMorePage;
-          if (!noMorePage && pageLoaded != null && index + 1 == comicsLoaded) {
+          final isLoading =
+              Provider.of<AppModel>(context, listen: false).isLoading;
+          if (!noMorePage &&
+              pageLoaded != null &&
+              reachLastItem &&
+              !isLoading) {
             debugPrint('Loading more... page: ${pageLoaded! + 1}');
+            // todo 20240303 learn more about WidgetsBinding.instance.addPostFrameCallback, it seems to be a workaround?
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) {
+                Provider.of<AppModel>(context, listen: false).isLoading = true;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                        'Loading... page: ${pageLoaded! + 1}, language: ${NHLanguage.currentSetting}'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+            );
             // todo 20240227 cannot update isLoading (global state) during build(), design how to show user that it is "loading"
-            // Provider.of<AppModel>(context, listen: false).isLoading = true;
             Provider.of<ComicListModel>(context, listen: false)
                 .fetchPage(page: pageLoaded! + 1)
-                .then((value) => Provider.of<AppModel>(context, listen: false)
-                    .isLoading = false);
+                .then(
+                  (_) => Provider.of<AppModel>(context, listen: false)
+                      .isLoading = false,
+                );
           }
           debugPrint("index: $index");
           // if (nhlist == null) return Container();
@@ -994,79 +1039,115 @@ class ComicSliverGrid extends StatelessWidget {
           var thumbnailLink = "https://t.nhentai.net/galleries/$mid/thumb.$ext";
           debugPrint("https://t.nhentai.net/galleries/$mid/thumb.$ext");
 
-          return Column(
-            children: [
-              Expanded(
-                child: Card(
-                  // clipBehavior is necessary because, without it, the InkWell's animation
-                  // will extend beyond the rounded edges of the [Card] (see https://github.com/flutter/flutter/issues/109776)
-                  // This comes with a small performance cost, and you should not set [clipBehavior]
-                  // unless you need it.
-                  clipBehavior: Clip.hardEdge,
-                  child: InkWell(
-                    splashColor: Colors.blue.withAlpha(30),
-                    onTap: () async {
-                      Provider.of<CurrentComicModel>(context, listen: false)
-                          .fetchComic(id);
-                      context
-                          .push(Uri(path: '/third', queryParameters: {'id': id})
-                              .toString())
-                          .then((_) => Provider.of<CurrentComicModel>(context,
-                                  listen: false)
-                              .clearComic());
-                    },
-                    child: SimpleCachedNetworkImage(
-                      url: thumbnailLink,
-                      width: thumbnailWidth,
-                      height: thumbnailHeight,
-                    ),
-                  ),
-                ),
-              ),
-              Text(
-                title,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.add_to_photos_outlined),
-                    onPressed: () {
-                      Store.addComic(
-                        id: id,
-                        mid: mid,
-                        title: title,
-                        pages: pages,
-                        images: jsonEncode(comic.images.toJson()),
-                      );
-                      Store.collectComic(collectionName: 'Next', id: id);
-                    },
-                  ),
-                  Text("${pages}p"),
-                  IconButton(
-                    icon: const Icon(Icons.favorite_outline),
-                    onPressed: () {
-                      Store.addComic(
-                        id: id,
-                        mid: mid,
-                        title: title,
-                        pages: pages,
-                        images: jsonEncode(comic.images.toJson()),
-                      );
-                      Store.collectComic(collectionName: 'Favorite', id: id);
-                    },
-                  ),
-                ],
-              )
-            ],
-          );
+          return ComicListItem(
+              id: id,
+              thumbnailLink: thumbnailLink,
+              thumbnailWidth: thumbnailWidth,
+              thumbnailHeight: thumbnailHeight,
+              title: title,
+              mid: mid,
+              pages: pages,
+              comic: comic);
         },
         // childCount: 1,
         childCount: comicsLoaded,
         // childCount: nhlist.result?.length ?? 100,
       ),
+    );
+  }
+}
+
+class ComicListItem extends StatelessWidget {
+  const ComicListItem({
+    super.key,
+    required this.id,
+    required this.thumbnailLink,
+    required this.thumbnailWidth,
+    required this.thumbnailHeight,
+    required this.title,
+    required this.mid,
+    required this.pages,
+    required this.comic,
+  });
+
+  final String id;
+  final String thumbnailLink;
+  final int thumbnailWidth;
+  final int thumbnailHeight;
+  final String title;
+  final String mid;
+  final int pages;
+  final ComicCover comic;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: Card(
+            // clipBehavior is necessary because, without it, the InkWell's animation
+            // will extend beyond the rounded edges of the [Card] (see https://github.com/flutter/flutter/issues/109776)
+            // This comes with a small performance cost, and you should not set [clipBehavior]
+            // unless you need it.
+            clipBehavior: Clip.hardEdge,
+            child: InkWell(
+              splashColor: Colors.blue.withAlpha(30),
+              onTap: () async {
+                Provider.of<CurrentComicModel>(context, listen: false)
+                    .fetchComic(id);
+                context
+                    .push(Uri(path: '/third', queryParameters: {'id': id})
+                        .toString())
+                    .then((_) =>
+                        Provider.of<CurrentComicModel>(context, listen: false)
+                            .clearComic());
+              },
+              child: SimpleCachedNetworkImage(
+                url: thumbnailLink,
+                width: thumbnailWidth,
+                height: thumbnailHeight,
+              ),
+            ),
+          ),
+        ),
+        Text(
+          title,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.add_to_photos_outlined),
+              onPressed: () {
+                Store.addComic(
+                  id: id,
+                  mid: mid,
+                  title: title,
+                  pages: pages,
+                  images: jsonEncode(comic.images.toJson()),
+                );
+                Store.collectComic(collectionName: 'Next', id: id);
+              },
+            ),
+            Text("${pages}p"),
+            IconButton(
+              icon: const Icon(Icons.favorite_outline),
+              onPressed: () {
+                Store.addComic(
+                  id: id,
+                  mid: mid,
+                  title: title,
+                  pages: pages,
+                  images: jsonEncode(comic.images.toJson()),
+                );
+                Store.collectComic(collectionName: 'Favorite', id: id);
+              },
+            ),
+          ],
+        )
+      ],
     );
   }
 }

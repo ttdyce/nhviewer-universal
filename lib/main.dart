@@ -424,7 +424,7 @@ class Store {
     );
   }
 
-  static Future<void> setCFCookie(String userAgent, String token) async {
+  static Future<void> setCFCookies(String userAgent, String token) async {
     final db = await _database;
     await db.insert(
       'CF',
@@ -433,7 +433,7 @@ class Store {
     );
   }
 
-  static Future<(String, String)> getCFCookie() async {
+  static Future<(String, String)> getCFCookies() async {
     final db = await _database;
     final cf = await db.query('CF');
     if (cf.isNotEmpty) {
@@ -535,47 +535,98 @@ class FirstScreen extends StatelessWidget {
     final useragent = await controller.getUserAgent();
     debugPrint(useragent);
 
-    await Store.setCFCookie(useragent, token ?? '');
+    await Store.setCFCookies(useragent, token ?? '');
     await fetchIndex();
+  }
+
+  Future<bool> testLastCFCookies() async {
+    debugPrint("testLastCFCookies...");
+    final (agent, token) = await Store.getCFCookies();
+    if (agent.isEmpty || token.isEmpty) {
+      return false;
+    }
+    debugPrint("User agent and token ok!");
+
+    final dio = Dio();
+    const url = "https://nhentai.net";
+    try {
+      await dio.get(url,
+          options: Options(headers: {
+            HttpHeaders.userAgentHeader: agent,
+            HttpHeaders.cookieHeader: "cf_clearance=$token",
+          }));
+    } on DioException catch (e) {
+      debugPrint("DioException: status code=${e.response?.statusCode}");
+      return false;
+    }
+
+    debugPrint("testLastCFCookies ok!");
+    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     final controller = WebViewController();
 
-    // todo 20240215 test stored CF cookie if any
+    return FutureBuilder(
+      future: testLastCFCookies(),
+      builder: (BuildContext context, AsyncSnapshot snapshot) {
+        if (!snapshot.hasData) {
+          // todo 20240304 Show splash screen while testing existing CFCookies
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    controller
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000))
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (String url) async {
-            await receiveCFCookies(controller,
-                Provider.of<ComicListModel>(context, listen: false).fetchIndex);
+        final bool hasCFCookies = snapshot.data;
+        if (hasCFCookies) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            context.read<AppModel>().isLoading = true;
+            await context.read<ComicListModel>().fetchIndex();
             if (!context.mounted) return;
+            context.read<AppModel>().isLoading = false;
             context.go('/index');
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse('https://nhentai.net'));
+          });
+          
+          // todo 20240304 Show splash screen while testing existing CFCookies
+          return const Center(child: CircularProgressIndicator());
+        } else {
+          controller
+            ..setJavaScriptMode(JavaScriptMode.unrestricted)
+            ..setBackgroundColor(const Color(0x00000000))
+            ..setNavigationDelegate(
+              NavigationDelegate(
+                onPageFinished: (String url) async {
+                  context.read<AppModel>().isLoading = true;
+                  await receiveCFCookies(
+                      controller,
+                      Provider.of<ComicListModel>(context, listen: false)
+                          .fetchIndex);
+                  if (!context.mounted) return;
+                  context.read<AppModel>().isLoading = false;
+                  context.go('/index');
+                },
+              ),
+            )
+            ..loadRequest(Uri.parse('https://nhentai.net'));
+        }
 
-    return SafeArea(
-      child: Scaffold(
-        body: Center(
-          child: Column(
-            children: [
-              const Text(
-                  'Passing Cloudflare checking, please wait and click "I am human" checkbox if any...'),
-              Expanded(
-                  child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: WebViewWidget(controller: controller),
-              )),
-            ],
+        return SafeArea(
+          child: Scaffold(
+            body: Center(
+              child: Column(
+                children: [
+                  const Text(
+                      'Passing Cloudflare checking, please wait and click "I am human" checkbox if any...'),
+                  Expanded(
+                      child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: WebViewWidget(controller: controller),
+                  )),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

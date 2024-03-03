@@ -58,6 +58,7 @@ class ComicListModel extends ChangeNotifier {
   /// [language] is the language setting for the comics to fetch.
   /// [sortByPopularType] is the popularity filter, defaults to null.
   /// [retryCount] keeps track of the number of retries attempted.
+  /// [clearComic] clears the list of fetched comics.
   Future<void> fetchIndex({
     int page = 1,
     String? language,
@@ -76,7 +77,7 @@ class ComicListModel extends ChangeNotifier {
     }
 
     language = language ?? NHLanguage.currentSetting;
-    final (agent, token) = await Store.getCFCookie();
+    final (agent, token) = await Store.getCFCookies();
     var url =
         "https://nhentai.net/api/galleries/search?query=$language&page=$page";
     if (sortByPopularType != null) {
@@ -171,7 +172,7 @@ class ComicListModel extends ChangeNotifier {
     }
 
     language = language ?? NHLanguage.currentSetting;
-    final (agent, token) = await Store.getCFCookie();
+    final (agent, token) = await Store.getCFCookies();
     var url =
         "https://nhentai.net/api/galleries/search?query=$q%20$language&page=$page";
     if (sortByPopularType != null) {
@@ -256,7 +257,7 @@ class CurrentComicModel extends ChangeNotifier {
   Map<String, String>? headers;
 
   Future<void> fetchComic(String id) async {
-    final (agent, token) = await Store.getCFCookie();
+    final (agent, token) = await Store.getCFCookies();
 
     headers = {
       HttpHeaders.userAgentHeader: agent,

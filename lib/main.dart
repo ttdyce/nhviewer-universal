@@ -793,7 +793,9 @@ class _AppState extends State<App> {
                 searchController: appModel.searchController,
                 onSubmitted: (value) {
                   appModel.searchController.closeView(value);
-                  appModel.navigationIndex = 0;
+                  if (appModel.navigationIndex != 0) {
+                    appModel.navigationIndex = 0;
+                  }
 
                   context.read<AppModel>().isLoading = true;
                   context

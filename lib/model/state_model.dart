@@ -12,10 +12,12 @@ class AppModel extends ChangeNotifier {
 
   int get navigationIndex => _navigationIndex;
   set navigationIndex(int value) {
-    _navigationIndex = value;
-    if (value != 2) {
+    final doubleClickIndex = _navigationIndex == 0 && value == 0;
+    final fromIndexPage = navigationIndex == 0;
+    if (doubleClickIndex || fromIndexPage) {
       searchController.text = '';
     }
+    _navigationIndex = value;
     notifyListeners();
   }
 

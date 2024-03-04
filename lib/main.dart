@@ -392,8 +392,7 @@ class Store {
 
   static init() async {
     // uncomment to refresh token, for debug purpose
-    // deleteDatabase('database.db');
-    late final path;
+    late final String path;
 
     if (Platform.isIOS) {
       path = join((await getLibraryDirectory()).path, 'database.db');
@@ -403,6 +402,7 @@ class Store {
     debugPrint(join((await getLibraryDirectory()).path, 'database.db'));
     debugPrint(join(await getDatabasesPath(), 'database.db'));
 
+    // deleteDatabase(path);
     _database = openDatabase(
       // Set the path to the database. Note: Using the `join` function from the
       // `path` package is best practice to ensure the path is correctly
@@ -410,8 +410,11 @@ class Store {
       path,
       onCreate: (db, version) async {
         // Run the CREATE TABLE statement on the database.
+        // await db.execute(
+        //   'CREATE TABLE CF(userAgent TEXT NOT NULL PRIMARY KEY, token TEXT NOT NULL)',
+        // );
         await db.execute(
-          'CREATE TABLE CF(userAgent TEXT NOT NULL PRIMARY KEY, token TEXT NOT NULL)',
+          'CREATE TABLE Options(id INTEGER PRIMARY KEY, name TEXT NOT NULL, value TEXT NOT NULL)',
         );
         await db.execute(
           'CREATE TABLE Comic(id TEXT NOT NULL Primary Key, mid TEXT NOT NULL, title TEXT NOT NULL, images TEXT NOT NULL, pages INTEGER NOT NULL)',
@@ -429,17 +432,34 @@ class Store {
   static Future<void> setCFCookies(String userAgent, String token) async {
     final db = await _database;
     await db.insert(
-      'CF',
-      CFConfig(userAgent: userAgent, token: token).toMap(),
+      'Options',
+      {
+        'name': 'userAgent',
+        'value': userAgent,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    await db.insert(
+      'Options',
+      {
+        'name': 'token',
+        'value': token,
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
   static Future<(String, String)> getCFCookies() async {
     final db = await _database;
-    final cf = await db.query('CF');
-    if (cf.isNotEmpty) {
-      return (cf.first['userAgent'] as String, cf.first['token'] as String);
+    final userAgent = await db
+        .rawQuery('select value from Options where name = ?', ['userAgent']);
+    final token =
+        await db.rawQuery('select value from Options where name = ?', ['token']);
+    if (userAgent.isNotEmpty && token.isNotEmpty) {
+      return (
+        userAgent.first['value'] as String,
+        token.first['value'] as String
+      );
     }
 
     return ("", "");

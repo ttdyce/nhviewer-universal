@@ -1,20 +1,3 @@
-class CFConfig{
-  final String userAgent;
-  final String token;
-
-  const CFConfig({
-    required this.userAgent,
-    required this.token,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'useragent': userAgent,
-      'token': token,
-    };
-  }
-}
-
 /// Code generated using [JSON to Dart converter](https://javiercbk.github.io/json_to_dart/) by Javier Lecuona. 
 /// Note that id and mediaid could be both string and int
 class NHList {

@@ -50,6 +50,13 @@ Future<void> main() async {
                     if (sortByPopularType == null) {
                       context.read<ComicListModel>().sortByPopularType =
                           NHPopularType.month;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Sort by popular type: ${NHPopularType.month}'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
                     } else {
                       context.read<ComicListModel>().sortByPopularType = null;
                     }
@@ -75,6 +82,7 @@ Future<void> main() async {
 
                         final screens = {
                           0: () {
+                            // todo 20240304 handle go back from search, and scroll to top
                             appModel.navigationIndex = index;
                             context.read<AppModel>().isLoading = true;
                             context
@@ -87,41 +95,35 @@ Future<void> main() async {
                             appModel.navigationIndex = index;
                             // context.go('/favorites');
                           },
+                          // 2: () {
+                          //   // handle on showDialog cancel
+                          //   showDialog(
+                          //       context: context,
+                          //       builder: (context) {
+                          //         return AlertDialog(
+                          //           title: const Text('Search'),
+                          //           content: TextField(
+                          //             autofocus: true,
+                          //             onSubmitted: (value) {
+                          //               appModel.navigationIndex = index;
+
+                          //               context.read<AppModel>().isLoading =
+                          //                   true;
+                          //               context
+                          //                   .read<ComicListModel>()
+                          //                   .fetchSearch(value,
+                          //                       clearComic: true)
+                          //                   .then((value) => context
+                          //                       .read<AppModel>()
+                          //                       .isLoading = false);
+
+                          //               Navigator.of(context).pop();
+                          //             },
+                          //           ),
+                          //         );
+                          //       });
+                          // },
                           2: () {
-                            // context.read<AppModel>().isLoading = true;
-                            // context
-                            //     .read<ComicListModel>()
-                            //     .fetchSearch('CL-orz', clearComic: true)
-                            //     .then((value) =>
-                            //         context.read<AppModel>().isLoading = false);
-                            // handle on showDialog cancel
-                            showDialog(
-                                context: context,
-                                builder: (context) {
-                                  return AlertDialog(
-                                    title: const Text('Search'),
-                                    content: TextField(
-                                      autofocus: true,
-                                      onSubmitted: (value) {
-                                        appModel.navigationIndex = index;
-
-                                        context.read<AppModel>().isLoading =
-                                            true;
-                                        context
-                                            .read<ComicListModel>()
-                                            .fetchSearch(value,
-                                                clearComic: true)
-                                            .then((value) => context
-                                                .read<AppModel>()
-                                                .isLoading = false);
-
-                                        Navigator.of(context).pop();
-                                      },
-                                    ),
-                                  );
-                                });
-                          },
-                          3: () {
                             appModel.navigationIndex = index;
                             context.read<AppModel>().isLoading = true;
                             context
@@ -131,10 +133,10 @@ Future<void> main() async {
                                     context.read<AppModel>().isLoading = false);
                             // context.go('/collections');
                           },
-                          4: () {
-                            appModel.navigationIndex = index;
-                            // context.go('/settings');
-                          },
+                          // 4: () {
+                          //   appModel.navigationIndex = index;
+                          //   // context.go('/settings');
+                          // },
                         };
                         screens[index]?.call();
 
@@ -147,28 +149,28 @@ Future<void> main() async {
                         NavigationDestination(
                           selectedIcon: Icon(Icons.home),
                           icon: Icon(Icons.home_outlined),
-                          label: 'Home',
+                          label: 'Index',
                         ),
                         NavigationDestination(
                           selectedIcon: Icon(Icons.favorite),
                           icon: Icon(Icons.favorite_border),
                           label: 'Favorites',
                         ),
-                        NavigationDestination(
-                          selectedIcon: Icon(Icons.search),
-                          icon: Icon(Icons.search_outlined),
-                          label: 'Search',
-                        ),
+                        // NavigationDestination(
+                        //   selectedIcon: Icon(Icons.search),
+                        //   icon: Icon(Icons.search_outlined),
+                        //   label: 'Search',
+                        // ),
                         NavigationDestination(
                           selectedIcon: Icon(Icons.folder),
                           icon: Icon(Icons.folder_outlined),
                           label: 'Collections',
                         ),
-                        NavigationDestination(
-                          selectedIcon: Icon(Icons.settings),
-                          icon: Icon(Icons.settings_outlined),
-                          label: 'Settings',
-                        ),
+                        // NavigationDestination(
+                        //   selectedIcon: Icon(Icons.settings),
+                        //   icon: Icon(Icons.settings_outlined),
+                        //   label: 'Settings',
+                        // ),
                       ],
                     );
                   },
@@ -585,7 +587,7 @@ class FirstScreen extends StatelessWidget {
             context.read<AppModel>().isLoading = false;
             context.go('/index');
           });
-          
+
           // todo 20240304 Show splash screen while testing existing CFCookies
           return const Center(child: CircularProgressIndicator());
         } else {
@@ -771,7 +773,7 @@ class _AppState extends State<App> {
                 searchController: appModel.searchController,
                 onSubmitted: (value) {
                   appModel.searchController.closeView(value);
-                  appModel.navigationIndex = 2;
+                  appModel.navigationIndex = 0;
 
                   context.read<AppModel>().isLoading = true;
                   context
@@ -785,7 +787,10 @@ class _AppState extends State<App> {
                 barTrailing: [
                   // todo 20240302 remove splash effect? like gmail thing
                   IconButton.filledTonal(
-                    onPressed: () {},
+                    onPressed: () {
+                      // todo 20240304 go to settings screen
+                      // context.go('/settings');
+                    },
                     icon: ClipOval(
                       child: CachedNetworkImage(
                         // get hash in the url: echo -n "someemail@email.com" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | openssl dgst -sha256
@@ -859,6 +864,7 @@ class _AppState extends State<App> {
             },
           ),
           FutureBuilder(
+            // todo 20240304 store future in state_model, refresh when clicked navigation bar
             future: Store.getCollection('Favorite'),
             builder: (BuildContext context, AsyncSnapshot snapshot) {
               if (!snapshot.hasData) {
@@ -907,36 +913,36 @@ class _AppState extends State<App> {
           //     ],
           //   ),
           // ),
-          Consumer<ComicListModel>(
-            builder: (BuildContext context, ComicListModel comicListModel,
-                Widget? child) {
-              if (comicListModel.comics == null) {
-                return SliverList(
-                  delegate: SliverChildListDelegate(
-                    [
-                      // const LinearProgressIndicator(),
-                    ],
-                  ),
-                );
-              }
+          // Consumer<ComicListModel>(
+          //   builder: (BuildContext context, ComicListModel comicListModel,
+          //       Widget? child) {
+          //     if (comicListModel.comics == null) {
+          //       return SliverList(
+          //         delegate: SliverChildListDelegate(
+          //           [
+          //             // const LinearProgressIndicator(),
+          //           ],
+          //         ),
+          //       );
+          //     }
 
-              return ComicSliverGrid(
-                  comics: comicListModel.comics!
-                      .map((e) => ComicCover(
-                            id: e.id!,
-                            mediaId: e.mediaId!,
-                            title: e.title!.english!,
-                            images: e.images!,
-                            pages: e.numPages!,
-                            thumbnailExt: App.extMap[e.images!.thumbnail!.t!]!,
-                            thumbnailWidth: e.images!.thumbnail!.w!,
-                            thumbnailHeight: e.images!.thumbnail!.h!,
-                          ))
-                      .toList(),
-                  comicsLoaded: comicListModel.comics!.length,
-                  pageLoaded: comicListModel.pageLoaded);
-            },
-          ),
+          //     return ComicSliverGrid(
+          //         comics: comicListModel.comics!
+          //             .map((e) => ComicCover(
+          //                   id: e.id!,
+          //                   mediaId: e.mediaId!,
+          //                   title: e.title!.english!,
+          //                   images: e.images!,
+          //                   pages: e.numPages!,
+          //                   thumbnailExt: App.extMap[e.images!.thumbnail!.t!]!,
+          //                   thumbnailWidth: e.images!.thumbnail!.w!,
+          //                   thumbnailHeight: e.images!.thumbnail!.h!,
+          //                 ))
+          //             .toList(),
+          //         comicsLoaded: comicListModel.comics!.length,
+          //         pageLoaded: comicListModel.pageLoaded);
+          //   },
+          // ),
           Consumer<ComicListModel>(
             builder: (BuildContext context, ComicListModel comicListModel,
                 Widget? child) {
@@ -996,13 +1002,13 @@ class _AppState extends State<App> {
               );
             },
           ),
-          SliverList(
-            delegate: SliverChildListDelegate(
-              [
-                const Center(child: Text('Settings')),
-              ],
-            ),
-          )
+          // SliverList(
+          //   delegate: SliverChildListDelegate(
+          //     [
+          //       const Center(child: Text('Settings')),
+          //     ],
+          //   ),
+          // )
         ][Provider.of<AppModel>(context).navigationIndex],
         // ][0],
       ],

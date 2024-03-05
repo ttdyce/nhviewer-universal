@@ -30,7 +30,7 @@ public class MainActivity extends FlutterActivity {
                                 if (cookies != "") {
                                     result.success(cookies);
                                 } else {
-                                    result.error("UNAVAILABLE", "Battery level not available.", null);
+                                    result.error("UNAVAILABLE", "receiveCFCookies error", null);
                                 }
                             } else {
                                 result.notImplemented();
@@ -39,9 +39,9 @@ public class MainActivity extends FlutterActivity {
     }
 
     private String receiveCFCookies() {
-        // return CookieManager.getInstance().getCookie("https://nhentai.net");
+        return CookieManager.getInstance().getCookie("https://nhentai.net");
         // todo 20240211 not working, retuned 403 somehow
-        return CookieManager.getInstance().getCookie("https://nhentai.net").split("; ")[1].split("=")[1];
+        // return CookieManager.getInstance().getCookie("https://nhentai.net").split("; ")[1].split("=")[1];
 
         // int batteryLevel = -1;
         // if (VERSION.SDK_INT >= VERSION_CODES.LOLLIPOP) {

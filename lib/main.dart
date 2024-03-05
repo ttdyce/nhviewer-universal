@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:concept_nhv/model/data_model.dart';
@@ -73,13 +74,6 @@ Future<void> main() async {
                     return NavigationBar(
                       onDestinationSelected: (int index) {
                         context.goNamed('index');
-                        // final actions = {
-                        //   // 1: () => context.read<ComicListModel>().fetchFavorite(),
-                        //   3: () =>
-                        //       context.read<ComicListModel>().fetchCollections(),
-                        // };
-                        // actions[index]?.call();
-
                         final screens = {
                           0: () {
                             // todo 20240304 handle go back from search, and scroll to top
@@ -93,36 +87,7 @@ Future<void> main() async {
                           },
                           1: () {
                             appModel.navigationIndex = index;
-                            // context.go('/favorites');
                           },
-                          // 2: () {
-                          //   // handle on showDialog cancel
-                          //   showDialog(
-                          //       context: context,
-                          //       builder: (context) {
-                          //         return AlertDialog(
-                          //           title: const Text('Search'),
-                          //           content: TextField(
-                          //             autofocus: true,
-                          //             onSubmitted: (value) {
-                          //               appModel.navigationIndex = index;
-
-                          //               context.read<AppModel>().isLoading =
-                          //                   true;
-                          //               context
-                          //                   .read<ComicListModel>()
-                          //                   .fetchSearch(value,
-                          //                       clearComic: true)
-                          //                   .then((value) => context
-                          //                       .read<AppModel>()
-                          //                       .isLoading = false);
-
-                          //               Navigator.of(context).pop();
-                          //             },
-                          //           ),
-                          //         );
-                          //       });
-                          // },
                           2: () {
                             appModel.navigationIndex = index;
                             context.read<AppModel>().isLoading = true;
@@ -131,12 +96,7 @@ Future<void> main() async {
                                 .fetchCollections()
                                 .then((value) =>
                                     context.read<AppModel>().isLoading = false);
-                            // context.go('/collections');
                           },
-                          // 4: () {
-                          //   appModel.navigationIndex = index;
-                          //   // context.go('/settings');
-                          // },
                         };
                         screens[index]?.call();
 
@@ -156,21 +116,11 @@ Future<void> main() async {
                           icon: Icon(Icons.favorite_border),
                           label: 'Favorites',
                         ),
-                        // NavigationDestination(
-                        //   selectedIcon: Icon(Icons.search),
-                        //   icon: Icon(Icons.search_outlined),
-                        //   label: 'Search',
-                        // ),
                         NavigationDestination(
                           selectedIcon: Icon(Icons.folder),
                           icon: Icon(Icons.folder_outlined),
                           label: 'Collections',
                         ),
-                        // NavigationDestination(
-                        //   selectedIcon: Icon(Icons.settings),
-                        //   icon: Icon(Icons.settings_outlined),
-                        //   label: 'Settings',
-                        // ),
                       ],
                     );
                   },
@@ -188,28 +138,17 @@ Future<void> main() async {
                 path: '/collection',
                 builder: (context, state) => const CollectionScreen(),
               ),
-              // GoRoute(
-              //   path: '/favorites',
-              //   builder: (context, state) => const FavoriteScreen(),
-              // ),
-              // GoRoute(
-              //   path: '/search',
-              //   builder: (context, state) => const IndexScreen(),
-              // ),
-              // GoRoute(
-              //   path: '/collections',
-              //   builder: (context, state) => const CollectionListScreen(),
-              // ),
-              // GoRoute(
-              //   path: '/settings',
-              //   builder: (context, state) => const IndexScreen(),
-              // ),
             ],
           ),
           GoRoute(
             name: 'third',
             path: '/third',
             builder: (context, state) => const ThirdScreen(),
+          ),
+          GoRoute(
+            name: 'settings',
+            path: '/settings',
+            builder: (context, state) => const SettingsScreen(),
           ),
         ],
       ),
@@ -399,8 +338,8 @@ class Store {
     } else {
       path = join(await getDatabasesPath(), 'database.db');
     }
-    debugPrint(join((await getLibraryDirectory()).path, 'database.db'));
-    debugPrint(join(await getDatabasesPath(), 'database.db'));
+    // debugPrint(join((await getLibraryDirectory()).path, 'database.db'));
+    // debugPrint(join(await getDatabasesPath(), 'database.db'));
 
     // deleteDatabase(path);
     _database = openDatabase(
@@ -410,11 +349,8 @@ class Store {
       path,
       onCreate: (db, version) async {
         // Run the CREATE TABLE statement on the database.
-        // await db.execute(
-        //   'CREATE TABLE CF(userAgent TEXT NOT NULL PRIMARY KEY, token TEXT NOT NULL)',
-        // );
         await db.execute(
-          'CREATE TABLE Options(id INTEGER PRIMARY KEY, name TEXT NOT NULL, value TEXT NOT NULL)',
+          'CREATE TABLE Options(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, value TEXT NOT NULL)',
         );
         await db.execute(
           'CREATE TABLE Comic(id TEXT NOT NULL Primary Key, mid TEXT NOT NULL, title TEXT NOT NULL, images TEXT NOT NULL, pages INTEGER NOT NULL)',
@@ -425,7 +361,23 @@ class Store {
       },
       // Set the version. This executes the onCreate function and provides a
       // path to perform database upgrades and downgrades.
-      version: 1,
+      // todo 20240306 combine every db migration into version 1, as release version 1
+      version: 3,
+      onUpgrade: (db, oldVersion, newVersion) {
+        if (oldVersion < 2) {
+          db.execute(
+            'CREATE TABLE Options(id INTEGER PRIMARY KEY, name TEXT NOT NULL, value TEXT NOT NULL)',
+          );
+        }
+        if (oldVersion < 3) {
+          db.execute(
+            'DROP TABLE Options',
+          );
+          db.execute(
+            'CREATE TABLE Options(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, value TEXT NOT NULL)',
+          );
+        }
+      },
     );
   }
 
@@ -453,8 +405,8 @@ class Store {
     final db = await _database;
     final userAgent = await db
         .rawQuery('select value from Options where name = ?', ['userAgent']);
-    final token =
-        await db.rawQuery('select value from Options where name = ?', ['token']);
+    final token = await db
+        .rawQuery('select value from Options where name = ?', ['token']);
     if (userAgent.isNotEmpty && token.isNotEmpty) {
       return (
         userAgent.first['value'] as String,
@@ -547,6 +499,12 @@ class FirstScreen extends StatelessWidget {
       if (token == null) {
         return;
       }
+      if (token.contains("cf_clearance=")) {
+        token = token
+            .split("; ")
+            .firstWhere((element) => element.startsWith("cf_clearance="))
+            .split("=")[1];
+      }
 
       cookies = 'Cookies: $token';
     } on PlatformException catch (e) {
@@ -583,6 +541,7 @@ class FirstScreen extends StatelessWidget {
     }
 
     debugPrint("testLastCFCookies ok!");
+    debugPrint("testLastCFCookies $token");
     return true;
   }
 
@@ -622,7 +581,9 @@ class FirstScreen extends StatelessWidget {
                       controller,
                       Provider.of<ComicListModel>(context, listen: false)
                           .fetchIndex);
-                  if (!context.mounted) return;
+                  // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
+                  final (_, token) = await Store.getCFCookies();
+                  if (!context.mounted || token.isEmpty) return;
                   context.read<AppModel>().isLoading = false;
                   context.go('/index');
                 },
@@ -721,6 +682,50 @@ class ThirdScreen extends StatelessWidget {
   }
 }
 
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: <Widget>[
+          const SliverAppBar(
+            title: Text('Settings'),
+          ),
+          SliverList.list(children: [
+            ListTile(
+              title: Text('Language'),
+              onTap: () {
+                // show a dialog for choosing Language, using the NHLanguages class. The dialog has 4 options: all, chinese, english, japanese
+                // showDialog(
+                //   context: context,
+                //   builder: (BuildContext context) {
+                //     return const LanguageDialog();
+                //   },
+                // );
+                NHLanguage.currentSetting = NHLanguage.chinese;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Language reset to Chinese'),
+                  ),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              title: const Text('Open Source Licenses'),
+              onTap: () {
+                showLicensePage(context: context);
+              },
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+}
+
 class SimpleCachedNetworkImage extends StatelessWidget {
   const SimpleCachedNetworkImage({
     super.key,
@@ -811,7 +816,7 @@ class _AppState extends State<App> {
                   IconButton.filledTonal(
                     onPressed: () {
                       // todo 20240304 go to settings screen
-                      // context.go('/settings');
+                      context.push('/settings');
                     },
                     icon: ClipOval(
                       child: CachedNetworkImage(

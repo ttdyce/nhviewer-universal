@@ -61,21 +61,22 @@ class ComicListModel extends ChangeNotifier {
   /// [sortByPopularType] is the popularity filter, defaults to null.
   /// [retryCount] keeps track of the number of retries attempted.
   /// [clearComic] clears the list of fetched comics.
-  Future<void> fetchIndex({
+  Future<int?> fetchIndex({
     int page = 1,
     String? language,
     // String? sortByPopularType = NHPopularType.allTime,
     String? sortByPopularType,
     int retryCount = 0,
     bool clearComic = false,
+    int? lastStatusCode,
   }) async {
     if (clearComic) {
       _fetchedComics.clear();
     }
 
-    if (retryCount > NHLanguage.chineseWorkaround.length) {
+    if (retryCount > 2) {
       debugPrint("fetchIndex retried $retryCount times, giving up");
-      return;
+      return lastStatusCode;
     }
 
     language = language ?? NHLanguage.currentSetting;
@@ -100,6 +101,7 @@ class ComicListModel extends ChangeNotifier {
       print(response);
       final freshComics = NHList.fromJson(response.data);
       _noMorePage = freshComics.result?.isEmpty ?? true;
+      lastStatusCode = response.statusCode;
       if (!_noMorePage) {
         _fetchedComics.add(freshComics);
       }
@@ -124,16 +126,18 @@ class ComicListModel extends ChangeNotifier {
         language = NHLanguage.chineseWorkaround[retryCount];
         NHLanguage.currentSetting = language;
       }
-      fetchIndex(
+      return fetchIndex(
         page: 1,
         language: language,
         sortByPopularType: sortByPopularType,
         retryCount: retryCount + 1,
+        lastStatusCode: e.response?.statusCode,
         clearComic: true,
       );
     }
 
     pageLoaded = page;
+    return lastStatusCode;
   }
 
   int get comicsLoaded {

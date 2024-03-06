@@ -82,8 +82,24 @@ Future<void> main() async {
                             context
                                 .read<ComicListModel>()
                                 .fetchIndex(clearComic: true)
-                                .then((value) =>
-                                    context.read<AppModel>().isLoading = false);
+                                .then((value) {
+                              String? message;
+                              if (value == 404) {
+                                message = 'API issue (404)';
+                              }
+                              if (value == 403) {
+                                message = 'CF Cookies issue (403)';
+                              }
+                              if (message != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(message),
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                              context.read<AppModel>().isLoading = false;
+                            });
                           },
                           1: () {
                             appModel.navigationIndex = index;
@@ -490,14 +506,14 @@ class FirstScreen extends StatelessWidget {
   static const platform = MethodChannel('samples.flutter.dev/cookies');
   const FirstScreen({super.key});
 
-  Future<void> receiveCFCookies(
+  Future<(String, String)> receiveCFCookies(
       controller, Future<void> Function() fetchIndex) async {
     String cookies;
     String? token;
     try {
       token = await platform.invokeMethod<String>('receiveCFCookies');
       if (token == null) {
-        return;
+        return ("", "");
       }
       if (token.contains("cf_clearance=")) {
         token = token
@@ -512,11 +528,12 @@ class FirstScreen extends StatelessWidget {
     }
 
     debugPrint(cookies);
-    final useragent = await controller.getUserAgent();
+    final String useragent = await controller.getUserAgent();
     debugPrint(useragent);
 
     await Store.setCFCookies(useragent, token ?? '');
     await fetchIndex();
+    return (useragent, token ?? '');
   }
 
   Future<bool> testLastCFCookies() async {
@@ -577,12 +594,11 @@ class FirstScreen extends StatelessWidget {
               NavigationDelegate(
                 onPageFinished: (String url) async {
                   context.read<AppModel>().isLoading = true;
-                  await receiveCFCookies(
+                  // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
+                  final (_, token) = await receiveCFCookies(
                       controller,
                       Provider.of<ComicListModel>(context, listen: false)
                           .fetchIndex);
-                  // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
-                  final (_, token) = await Store.getCFCookies();
                   if (!context.mounted || token.isEmpty) return;
                   context.read<AppModel>().isLoading = false;
                   context.go('/index');

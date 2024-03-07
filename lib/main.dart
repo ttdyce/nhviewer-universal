@@ -46,6 +46,7 @@ Future<void> main() async {
                 body: child,
                 floatingActionButton: FloatingActionButton(
                   onPressed: () {
+                    // logic is not straight forward here
                     final sortByPopularType =
                         context.read<ComicListModel>().sortByPopularType;
                     if (sortByPopularType == null) {
@@ -319,20 +320,39 @@ class CollectionListScreen extends StatelessWidget {
   }
 }
 
-class NHLanguage {
-  static const chinese = 'language:chinese';
-  // 20240215 workaround: sometimes lanugage tag 'chinese' returns 404 (error: does not exist)
-  static const chineseWorkaround = [
-    '-language:english -language:japanese',
-    '汉化',
-    '中国'
-  ];
-  static const japanese = 'language:japanese';
-  static const english = 'language:english';
-  static const all = '-';
-  static const all2 = 'language:-';
+enum NHLanguage {
+  all,
+  chinese,
+  japanese,
+  english;
 
-  static var currentSetting = chinese;
+  String get queryString {
+    switch (this) {
+      case NHLanguage.all:
+        return '-';
+      case NHLanguage.chinese:
+        return 'language:chinese';
+      case NHLanguage.japanese:
+        return 'language:japanese';
+      case NHLanguage.english:
+        return 'language:english';
+    }
+  }
+
+  List<String> get alternatives {
+    switch (this) {
+      case NHLanguage.all:
+        return ['language:-'];
+      case NHLanguage.chinese:
+        return ['-language:english -language:japanese', '汉化', '中国'];
+      case NHLanguage.japanese:
+      case NHLanguage.english:
+      default:
+        return [];
+    }
+  }
+
+  static NHLanguage current = NHLanguage.chinese;
 }
 
 class NHPopularType {
@@ -711,21 +731,62 @@ class SettingsScreen extends StatelessWidget {
           ),
           SliverList.list(children: [
             ListTile(
-              title: Text('Language'),
+              title: const Text('Language'),
+              subtitle: Text(NHLanguage.current.queryString),
               onTap: () {
-                // show a dialog for choosing Language, using the NHLanguages class. The dialog has 4 options: all, chinese, english, japanese
-                // showDialog(
-                //   context: context,
-                //   builder: (BuildContext context) {
-                //     return const LanguageDialog();
-                //   },
-                // );
-                NHLanguage.currentSetting = NHLanguage.chinese;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Language reset to Chinese'),
-                  ),
-                );
+                showDialog<bool>(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return SimpleDialog(
+                        title: const Text('Language'),
+                        children: [
+                          SimpleDialogOption(
+                            child: Text('All'),
+                            onPressed: () {
+                              NHLanguage.current = NHLanguage.all;
+                              Navigator.of(context).pop(true);
+                            },
+                          ),
+                          SimpleDialogOption(
+                            child: Text('Chinese'),
+                            onPressed: () {
+                              NHLanguage.current = NHLanguage.chinese;
+                              Navigator.of(context).pop(true);
+                            },
+                          ),
+                          SimpleDialogOption(
+                            child: Text('English'),
+                            onPressed: () {
+                              NHLanguage.current = NHLanguage.english;
+                              Navigator.of(context).pop(true);
+                            },
+                          ),
+                          SimpleDialogOption(
+                            child: Text('Japanese'),
+                            onPressed: () {
+                              NHLanguage.current = NHLanguage.japanese;
+                              Navigator.of(context).pop(true);
+                            },
+                          ),
+                        ],
+                      );
+                    }).then((value) {
+                  if (value == null || value == false) {
+                    return;
+                  }
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Language set to `${NHLanguage.current}`'),
+                    ),
+                  );
+                });
+              },
+            ),
+            ListTile(
+              title: const Text('Diagnose'),
+              onTap: () {
+                // todo 20240308 Check api status of all language query, and the real search with queries. Show result in real time.
               },
             ),
             const Divider(),
@@ -821,7 +882,7 @@ class _AppState extends State<App> {
                   context.read<AppModel>().isLoading = true;
                   context
                       .read<ComicListModel>()
-                      .fetchSearch(value, clearComic: true)
+                      .fetchSearch(q: value, clearComic: true)
                       .then((value) =>
                           context.read<AppModel>().isLoading = false);
 
@@ -1110,7 +1171,7 @@ class ComicSliverGrid extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                        'Loading... page: ${pageLoaded! + 1}, language: ${NHLanguage.currentSetting}'),
+                        'Loading... page: ${pageLoaded! + 1}, language: ${NHLanguage.current.name}'),
                     duration: const Duration(seconds: 2),
                   ),
                 );

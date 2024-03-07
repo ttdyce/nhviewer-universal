@@ -48,98 +48,6 @@ class ComicListModel extends ChangeNotifier {
 
   Function? _fetchPage;
 
-  /// Fetches the index of comics with optional language and popularity filter.
-  ///
-  /// The method fetches the comics from the specified page and applies the
-  /// language and popularity filters if provided. If the request fails more
-  /// than once, it gives up on retrying. In the case of a failure, if the
-  /// language is Chinese, it switches to an alternative Chinese language setting
-  /// and retries the fetch operation.
-  ///
-  /// [page] is the page number to fetch from the API.
-  /// [language] is the language setting for the comics to fetch.
-  /// [sortByPopularType] is the popularity filter, defaults to null.
-  /// [retryCount] keeps track of the number of retries attempted.
-  /// [clearComic] clears the list of fetched comics.
-  Future<int?> fetchIndex({
-    int page = 1,
-    String? language,
-    // String? sortByPopularType = NHPopularType.allTime,
-    String? sortByPopularType,
-    int retryCount = 0,
-    bool clearComic = false,
-    int? lastStatusCode,
-  }) async {
-    if (clearComic) {
-      _fetchedComics.clear();
-    }
-
-    if (retryCount > 2) {
-      debugPrint("fetchIndex retried $retryCount times, giving up");
-      return lastStatusCode;
-    }
-
-    language = language ?? NHLanguage.currentSetting;
-    final (agent, token) = await Store.getCFCookies();
-    var url =
-        "https://nhentai.net/api/galleries/search?query=$language&page=$page";
-    if (sortByPopularType != null) {
-      _sortByPopularType = sortByPopularType;
-      url += "&sort=$sortByPopularType";
-    } else if (this.sortByPopularType != null) {
-      url += "&sort=${this.sortByPopularType}";
-    }
-
-    final dio = Dio();
-    debugPrint('Loading index: $url');
-    try {
-      final response = await dio.get(url,
-          options: Options(headers: {
-            HttpHeaders.userAgentHeader: agent,
-            HttpHeaders.cookieHeader: "cf_clearance=$token",
-          }));
-      print(response);
-      final freshComics = NHList.fromJson(response.data);
-      _noMorePage = freshComics.result?.isEmpty ?? true;
-      lastStatusCode = response.statusCode;
-      if (!_noMorePage) {
-        _fetchedComics.add(freshComics);
-      }
-      // This call tells the widgets that are listening to this model to rebuild.
-      notifyListeners();
-      _fetchPage = (p, clearComic) => fetchIndex(
-            page: p,
-            language: language,
-            sortByPopularType: sortByPopularType,
-            retryCount: retryCount,
-            clearComic: clearComic,
-          );
-    } on DioException catch (e) {
-      // workaround for sometimes 404 error returned for chinese
-      debugPrint(
-          "fetchIndex DioException, status code = ${e.response?.statusCode}");
-      debugPrint('fetchIndex failed ($url), retrying...');
-      if ([NHLanguage.chinese, ...NHLanguage.chineseWorkaround]
-          .contains(language)) {
-        debugPrint(
-            'Trying different language query from $language to ${NHLanguage.chineseWorkaround[retryCount]}');
-        language = NHLanguage.chineseWorkaround[retryCount];
-        NHLanguage.currentSetting = language;
-      }
-      return fetchIndex(
-        page: 1,
-        language: language,
-        sortByPopularType: sortByPopularType,
-        retryCount: retryCount + 1,
-        lastStatusCode: e.response?.statusCode,
-        clearComic: true,
-      );
-    }
-
-    pageLoaded = page;
-    return lastStatusCode;
-  }
-
   int get comicsLoaded {
     if (_fetchedComics.isEmpty) return 0;
 
@@ -162,25 +70,49 @@ class ComicListModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  fetchSearch(String q,
-      {int page = 1,
-      String? language,
-      String? sortByPopularType,
-      int retryCount = 0,
-      bool clearComic = false}) async {
+  Future<int?> fetchIndex({
+    int page = 1,
+    // String? sortByPopularType,
+    bool clearComic = false,
+  }) =>
+      fetchSearch(
+        q: '',
+        page: page,
+        // sortByPopularType: sortByPopularType,
+        clearComic: clearComic,
+      );
+
+  /// Fetch search result with query [q] and page [page]. If [clearComic] is
+  /// true, clear the current search result before fetching. If [retryCount]
+  /// is non-zero, it means this function is being called recursively to
+  /// retry the search with alternative language query. If [lastStatusCode] is
+  /// non-null, use it as the last status code of the previous search
+  /// request.
+  Future<int?> fetchSearch({
+    required String q,
+    int page = 1,
+    String? sortByPopularType,
+    int retryCount = 0,
+    bool clearComic = false,
+    int? lastStatusCode,
+  }) async {
     if (clearComic) {
       _fetchedComics.clear();
     }
 
-    if (retryCount > NHLanguage.chineseWorkaround.length) {
+    if (retryCount > NHLanguage.current.alternatives.length) {
       debugPrint("fetchSearch retried $retryCount times, giving up");
-      return;
+      return lastStatusCode;
     }
 
-    language = language ?? NHLanguage.currentSetting;
+    var languageQuery = NHLanguage.current.queryString;
+    if (retryCount > 0) {
+      languageQuery = NHLanguage.current.alternatives[retryCount - 1];
+    }
+
     final (agent, token) = await Store.getCFCookies();
     var url =
-        "https://nhentai.net/api/galleries/search?query=$q%20$language&page=$page";
+        "https://nhentai.net/api/galleries/search?query=$q%20$languageQuery&page=$page";
     if (sortByPopularType != null) {
       _sortByPopularType = sortByPopularType;
       url += "&sort=$sortByPopularType";
@@ -189,7 +121,11 @@ class ComicListModel extends ChangeNotifier {
     }
 
     final dio = Dio();
-    debugPrint('Loading search: $url');
+    if (q.isEmpty) {
+      debugPrint('Loading index (empty search): $url');
+    } else {
+      debugPrint('Loading search: $url');
+    }
     try {
       final response = await dio.get(url,
           options: Options(headers: {
@@ -199,34 +135,36 @@ class ComicListModel extends ChangeNotifier {
       print(response);
       final freshComics = NHList.fromJson(response.data);
       _noMorePage = freshComics.result?.isEmpty ?? true;
+      lastStatusCode = response.statusCode;
       if (!_noMorePage) {
         _fetchedComics.add(freshComics);
       }
-      // todo 20240227 it is known that when reaching last page (when freshComics is empty, i.e. {"result":[],"num_pages":2,"per_page":25}), it is rebuilding one more time. Tiny performance issue
+      // todo 20240227 Tiny performance issue: it is known that when reaching last page (when freshComics is empty, i.e. {"result":[],"num_pages":2,"per_page":25}), it is rebuilding one more time.
       // This call tells the widgets that are listening to this model to rebuild.
       notifyListeners();
-      _fetchPage = (p, clearComic) => fetchSearch(q,
-          page: p,
-          language: language,
-          sortByPopularType: sortByPopularType,
-          clearComic: clearComic);
-    } catch (e) {
-      print(e);
-      debugPrint('Loading search failed ($url), retrying...');
-      if (language == NHLanguage.chinese) {
-        language = NHLanguage.chineseWorkaround[retryCount];
-        NHLanguage.currentSetting = language;
-      }
-      fetchSearch(
-        q,
+      _fetchPage = (p, clearComic) => fetchSearch(
+            q: q,
+            page: p,
+            sortByPopularType: sortByPopularType,
+            retryCount: retryCount,
+            clearComic: clearComic,
+          );
+    } on DioException catch (e) {
+      debugPrint(
+          "fetchSearch DioException, status code = ${e.response?.statusCode}");
+      debugPrint('fetchSearch failed ($url), retrying...');
+      return fetchSearch(
+        q: q,
         page: page,
-        language: language,
         sortByPopularType: sortByPopularType,
         retryCount: retryCount + 1,
+        lastStatusCode: e.response?.statusCode,
+        clearComic: true,
       );
     }
 
     pageLoaded = page;
+    return lastStatusCode;
   }
 
   Future<void> fetchPage({int? page}) {

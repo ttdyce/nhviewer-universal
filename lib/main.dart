@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:concept_nhv/model/data_model.dart';
 import 'package:concept_nhv/model/state_model.dart';
+import 'package:concept_nhv/theme.dart';
 // import 'package:concept_nhv/sample.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
@@ -29,7 +30,7 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (context) => CurrentComicModel()),
     ],
     child: MaterialApp.router(
-      theme: ThemeData.light(useMaterial3: true),
+      theme: const NHVMaterialTheme(TextTheme()).dark(),
       routerConfig: GoRouter(
         routes: [
           GoRoute(

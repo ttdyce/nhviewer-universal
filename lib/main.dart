@@ -44,31 +44,42 @@ Future<void> main() async {
             builder: (context, state, child) {
               return Scaffold(
                 body: child,
-                floatingActionButton: FloatingActionButton(
-                  onPressed: () {
-                    // logic is not straight forward here
-                    final sortByPopularType =
-                        context.read<ComicListModel>().sortByPopularType;
-                    if (sortByPopularType == null) {
-                      context.read<ComicListModel>().sortByPopularType =
-                          NHPopularType.month;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Sort by popular type: ${NHPopularType.month}'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    } else {
-                      context.read<ComicListModel>().sortByPopularType = null;
+                floatingActionButton: Consumer<AppModel>(
+                  builder: (context, appModel, child) {
+                    if (appModel.navigationIndex != 0) {
+                      return Container();
                     }
-                    context.read<AppModel>().isLoading = true;
-                    // await context.read<ComicListModel>().fetchPage();
-                    // context.read<AppModel>().isLoading = false;
-                    context.read<ComicListModel>().fetchPage().then(
-                        (value) => context.read<AppModel>().isLoading = false);
+
+                    // only show FAB in index screen
+                    return FloatingActionButton(
+                      onPressed: () {
+                        // logic is not straight forward here
+                        final sortByPopularType =
+                            context.read<ComicListModel>().sortByPopularType;
+                        if (sortByPopularType == null) {
+                          context.read<ComicListModel>().sortByPopularType =
+                              NHPopularType.month;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Sort by popular type: ${NHPopularType.month}'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        } else {
+                          context.read<ComicListModel>().sortByPopularType =
+                              null;
+                        }
+                        context.read<AppModel>().isLoading = true;
+                        // await context.read<ComicListModel>().fetchPage();
+                        // context.read<AppModel>().isLoading = false;
+                        context.read<ComicListModel>().fetchPage().then(
+                            (value) =>
+                                context.read<AppModel>().isLoading = false);
+                      },
+                      child: const Icon(Icons.sort),
+                    );
                   },
-                  child: const Icon(Icons.sort),
                 ),
                 bottomNavigationBar: Consumer<AppModel>(
                   builder: (context, appModel, child) {
@@ -77,7 +88,7 @@ Future<void> main() async {
                         context.goNamed('index');
                         final screens = {
                           0: () {
-                            // todo 20240304 handle go back from search, and scroll to top
+                            // todo 20240304 handle keeping loaded comics, go back from search, and scroll to top
                             appModel.navigationIndex = index;
                             context.read<AppModel>().isLoading = true;
                             context
@@ -189,9 +200,7 @@ class CollectionScreen extends StatelessWidget {
           SliverAppBar(
             floating: true,
             snap: true,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(collectionName),
-            ),
+            title: Text(collectionName),
           ),
           FutureBuilder(
             future: Store.getCollection(collectionName),
@@ -246,76 +255,68 @@ class CollectionListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: <Widget>[
-        const SliverAppBar(
-          floating: true,
-          snap: true,
-          flexibleSpace: FlexibleSpaceBar(
-            title: Text('c-nhv'),
-          ),
-        ),
-        Consumer<ComicListModel>(
-          builder: (BuildContext context, ComicListModel comicListModel,
-              Widget? child) {
-            List<Map<String, Object?>> collectedComics =
-                comicListModel.everyCollection;
-            if (collectedComics.isEmpty) {
-              return SliverList(
-                delegate: SliverChildListDelegate(
-                  [
-                    // const LinearProgressIndicator(),
-                  ],
-                ),
-              );
-            }
+    return Consumer<ComicListModel>(
+      builder:
+          (BuildContext context, ComicListModel comicListModel, Widget? child) {
+        List<Map<String, Object?>> collectedComics =
+            comicListModel.everyCollection;
+        if (collectedComics.isEmpty) {
+          return SliverList(
+            delegate: SliverChildListDelegate(
+              [
+                // const LinearProgressIndicator(),
+              ],
+            ),
+          );
+        }
 
-            for (var comic in collectedComics) {
-              // debugPrint(comic.toString());
-              debugPrint(comic['name'].toString());
-              debugPrint(comic['comicid'].toString());
-              debugPrint(comic['dateCreated'].toString());
-              debugPrint(comic['mid'].toString());
-              debugPrint("---");
-            }
+        for (var comic in collectedComics) {
+          // debugPrint(comic.toString());
+          debugPrint(comic['name'].toString());
+          debugPrint(comic['comicid'].toString());
+          debugPrint(comic['dateCreated'].toString());
+          debugPrint(comic['mid'].toString());
+          debugPrint("---");
+        }
 
-            final favorite = collectedComics
-                .where((element) => element['name'] == 'Favorite')
-                .toList();
-            final next = collectedComics
-                .where((element) => element['name'] == 'Next')
-                .toList();
-            final history = collectedComics
-                .where((element) => element['name'] == 'History')
-                .toList();
+        final favorite = collectedComics
+            .where((element) => element['name'] == 'Favorite')
+            .toList();
+        final next = collectedComics
+            .where((element) => element['name'] == 'Next')
+            .toList();
+        final history = collectedComics
+            .where((element) => element['name'] == 'History')
+            .toList();
 
-            List<CollectionCover> collections =
-                [favorite, next, history].map((e) {
-              debugPrint("debug1");
-              final firstItem = e.firstOrNull;
-              if (firstItem == null) {
-                debugPrint("debug3 firstItem is null");
-              }
-              final mid = firstItem!['mid'] as String;
-              var images =
-                  NHImages.fromJson(jsonDecode(firstItem['images'] as String));
-              return CollectionCover(
-                mid: mid,
-                collectionName: firstItem['name'] as String,
-                collectedCount: e.length,
-                thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-                thumbnailWidth: images.thumbnail!.w!,
-                thumbnailHeight: images.thumbnail!.h!,
-              );
-            }).toList();
-
-            return CollectionSliverGrid(
-              collections: collections,
+        List<CollectionCover> collections = {
+          'Favorite': favorite,
+          'Next': next,
+          'History': history
+        }.entries.map((e) {
+          final firstItem = e.value.firstOrNull;
+          if (firstItem == null) {
+            return CollectionCover.emptyCollection(
+              collectionName: e.key,
             );
-          },
-        ),
-      ],
+          }
+          final mid = firstItem['mid'] as String;
+          var images =
+              NHImages.fromJson(jsonDecode(firstItem['images'] as String));
+          return CollectionCover(
+            mid: mid,
+            collectionName: firstItem['name'] as String,
+            collectedCount: e.value.length,
+            thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+            thumbnailWidth: images.thumbnail!.w!,
+            thumbnailHeight: images.thumbnail!.h!,
+          );
+        }).toList();
+
+        return CollectionSliverGrid(
+          collections: collections,
+        );
+      },
     );
   }
 }
@@ -366,7 +367,6 @@ class Store {
   static late final Future<Database> _database;
 
   static init() async {
-    // uncomment to refresh token, for debug purpose
     late final String path;
 
     if (Platform.isIOS) {
@@ -377,6 +377,7 @@ class Store {
     // debugPrint(join((await getLibraryDirectory()).path, 'database.db'));
     // debugPrint(join(await getDatabasesPath(), 'database.db'));
 
+    // uncomment to refresh token, for debug purpose
     // deleteDatabase(path);
     _database = openDatabase(
       // Set the path to the database. Note: Using the `join` function from the
@@ -415,6 +416,8 @@ class Store {
         }
       },
     );
+
+    // todo 20240308 load comic language from Options
   }
 
   static Future<void> setCFCookies(String userAgent, String token) async {
@@ -737,6 +740,7 @@ class SettingsScreen extends StatelessWidget {
                 showDialog<bool>(
                     context: context,
                     builder: (BuildContext context) {
+                      // todo 20240308 persist changes of NHLanguage.current
                       return SimpleDialog(
                         title: const Text('Language'),
                         children: [
@@ -1047,65 +1051,7 @@ class _AppState extends State<App> {
           //         pageLoaded: comicListModel.pageLoaded);
           //   },
           // ),
-          Consumer<ComicListModel>(
-            builder: (BuildContext context, ComicListModel comicListModel,
-                Widget? child) {
-              List<Map<String, Object?>> collectedComics =
-                  comicListModel.everyCollection;
-              if (collectedComics.isEmpty) {
-                return SliverList(
-                  delegate: SliverChildListDelegate(
-                    [
-                      // const LinearProgressIndicator(),
-                    ],
-                  ),
-                );
-              }
-
-              for (var comic in collectedComics) {
-                // debugPrint(comic.toString());
-                debugPrint(comic['name'].toString());
-                debugPrint(comic['comicid'].toString());
-                debugPrint(comic['dateCreated'].toString());
-                debugPrint(comic['mid'].toString());
-                debugPrint("---");
-              }
-
-              final favorite = collectedComics
-                  .where((element) => element['name'] == 'Favorite')
-                  .toList();
-              final next = collectedComics
-                  .where((element) => element['name'] == 'Next')
-                  .toList();
-              final history = collectedComics
-                  .where((element) => element['name'] == 'History')
-                  .toList();
-
-              List<CollectionCover> collections =
-                  [favorite, next, history].map((e) {
-                debugPrint("debug1");
-                final firstItem = e.firstOrNull;
-                if (firstItem == null) {
-                  debugPrint("debug3 firstItem is null");
-                }
-                final mid = firstItem!['mid'] as String;
-                var images = NHImages.fromJson(
-                    jsonDecode(firstItem['images'] as String));
-                return CollectionCover(
-                  mid: mid,
-                  collectionName: firstItem['name'] as String,
-                  collectedCount: e.length,
-                  thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-                  thumbnailWidth: images.thumbnail!.w!,
-                  thumbnailHeight: images.thumbnail!.h!,
-                );
-              }).toList();
-
-              return CollectionSliverGrid(
-                collections: collections,
-              );
-            },
-          ),
+          CollectionListScreen(),
           // SliverList(
           //   delegate: SliverChildListDelegate(
           //     [
@@ -1433,7 +1379,11 @@ class CollectionCover {
   final int thumbnailHeight;
 
   String get thumbnailLink {
-    return "https://t.nhentai.net/galleries/$mid/thumb.$thumbnailExt";
+    if (mid != "-1") {
+      return "https://t.nhentai.net/galleries/$mid/thumb.$thumbnailExt";
+    }
+
+    return "https://placehold.co/${thumbnailWidth}x$thumbnailHeight/png?text=$collectionName";
   }
 
   CollectionCover({
@@ -1444,6 +1394,17 @@ class CollectionCover {
     required this.thumbnailHeight,
     required this.mid,
   });
+
+  static CollectionCover emptyCollection({required String collectionName}) {
+    return CollectionCover(
+      mid: "-1",
+      collectionName: collectionName,
+      collectedCount: 0,
+      thumbnailExt: "",
+      thumbnailWidth: 720,
+      thumbnailHeight: 720,
+    );
+  }
 
   @override
   String toString() {

@@ -52,18 +52,18 @@ Future<void> main() async {
                     }
 
                     // only show FAB in index screen
-                    return FloatingActionButton(
-                      onPressed: () {
-                        // logic is not straight forward here
+                    return GestureDetector(
+                      onLongPress: () {
+                        // mostly same with FAB press below, here it change to NHPopularType.allTime
                         final sortByPopularType =
                             context.read<ComicListModel>().sortByPopularType;
                         if (sortByPopularType == null) {
                           context.read<ComicListModel>().sortByPopularType =
-                              NHPopularType.month;
+                              NHPopularType.allTime;
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                  'Sort by popular type: ${NHPopularType.month}'),
+                                  'Sort by popular type: ${NHPopularType.allTime}'),
                               duration: Duration(seconds: 2),
                             ),
                           );
@@ -78,7 +78,34 @@ Future<void> main() async {
                             (value) =>
                                 context.read<AppModel>().isLoading = false);
                       },
-                      child: const Icon(Icons.sort),
+                      child: FloatingActionButton(
+                        onPressed: () {
+                          // logic is not straight forward here
+                          final sortByPopularType =
+                              context.read<ComicListModel>().sortByPopularType;
+                          if (sortByPopularType == null) {
+                            context.read<ComicListModel>().sortByPopularType =
+                                NHPopularType.month;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                    'Sort by popular type: ${NHPopularType.month}'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          } else {
+                            context.read<ComicListModel>().sortByPopularType =
+                                null;
+                          }
+                          context.read<AppModel>().isLoading = true;
+                          // await context.read<ComicListModel>().fetchPage();
+                          // context.read<AppModel>().isLoading = false;
+                          context.read<ComicListModel>().fetchPage().then(
+                              (value) =>
+                                  context.read<AppModel>().isLoading = false);
+                        },
+                        child: const Icon(Icons.sort),
+                      ),
                     );
                   },
                 ),
@@ -86,7 +113,12 @@ Future<void> main() async {
                   builder: (context, appModel, child) {
                     return NavigationBar(
                       onDestinationSelected: (int index) {
-                        context.goNamed('index');
+                        // context.goNamed('index');
+                        if (appModel.searchController.isOpen) {
+                          appModel.searchController.text = '';
+                          appModel.searchController.closeView(null);
+                        }
+
                         final screens = {
                           0: () {
                             // todo 20240304 handle keeping loaded comics, go back from search, and scroll to top
@@ -261,15 +293,6 @@ class CollectionListScreen extends StatelessWidget {
           (BuildContext context, ComicListModel comicListModel, Widget? child) {
         List<Map<String, Object?>> collectedComics =
             comicListModel.everyCollection;
-        if (collectedComics.isEmpty) {
-          return SliverList(
-            delegate: SliverChildListDelegate(
-              [
-                // const LinearProgressIndicator(),
-              ],
-            ),
-          );
-        }
 
         for (var comic in collectedComics) {
           // debugPrint(comic.toString());
@@ -396,11 +419,14 @@ class Store {
         await db.execute(
           'CREATE TABLE Collection(name TEXT NOT NULL, comicid TEXT NOT NULL, dateCreated TEXT NOT NULL, PRIMARY KEY(`name`, `comicid`))',
         );
+        await db.execute(
+          'CREATE TABLE SearchHistory(id INTEGER PRIMARY KEY, query TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)',
+        );
       },
       // Set the version. This executes the onCreate function and provides a
       // path to perform database upgrades and downgrades.
       // todo 20240306 combine every db migration into version 1, as release version 1
-      version: 3,
+      version: 4,
       onUpgrade: (db, oldVersion, newVersion) {
         if (oldVersion < 2) {
           db.execute(
@@ -413,6 +439,11 @@ class Store {
           );
           db.execute(
             'CREATE TABLE Options(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, value TEXT NOT NULL)',
+          );
+        }
+        if (oldVersion < 4) {
+          db.execute(
+            'CREATE TABLE SearchHistory(id INTEGER PRIMARY KEY, query TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)',
           );
         }
       },
@@ -524,6 +555,33 @@ class Store {
 
     return collectedComics;
   }
+
+  static Future<void> addSearchHistory(String q) async {
+    final db = await _database;
+    await db.insert(
+      'SearchHistory',
+      {
+        'query': q,
+      },
+      // conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
+  }
+
+  static Future<List<Map<String, Object?>>> getSearchHistory() async {
+    final db = await _database;
+    final queryHistory =
+        await db.query('SearchHistory', orderBy: 'created_at DESC');
+    return queryHistory;
+  }
+
+  static Future<void> deleteSearchHistory(String e) async {
+    final db = await _database;
+    await db.delete(
+      'SearchHistory',
+      where: 'query = ?',
+      whereArgs: [e],
+    );
+  }
 }
 
 class FirstScreen extends StatelessWidget {
@@ -619,6 +677,7 @@ class FirstScreen extends StatelessWidget {
                 onPageFinished: (String url) async {
                   context.read<AppModel>().isLoading = true;
                   // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
+                  // todo 20240318 one of the options is to setstate(() => {}) to recheck cookie. But it may loop forever.
                   final (_, token) = await receiveCFCookies(
                       controller,
                       Provider.of<ComicListModel>(context, listen: false)
@@ -663,23 +722,48 @@ class IndexScreen extends StatelessWidget {
   }
 }
 
-class ThirdScreen extends StatelessWidget {
-  const ThirdScreen({super.key});
+class ThirdScreen extends StatefulWidget {
+  ScrollController? controller = ScrollController();
 
+  ThirdScreen({super.key, this.controller});
+
+  @override
+  State<ThirdScreen> createState() => _ThirdScreenState();
+}
+
+class _ThirdScreenState extends State<ThirdScreen> {
   @override
   Widget build(BuildContext context) {
     Map<String, String> query = GoRouterState.of(context).uri.queryParameters;
     final id = query['id']!;
 
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: <Widget>[
-          SliverAppBar(
-            title: Text(id),
-          ),
-          Consumer<CurrentComicModel>(
-            builder: (context, currentComicModel, child) {
-              if (currentComicModel.currentComic != null) {
+    return PopScope(
+      onPopInvoked: (didPop) {
+        debugPrint("onPopInvoked $didPop");
+        // if (didPop) {
+        //   widget.controller?.jumpTo(0);
+        // }
+      },
+      child: Scaffold(
+        body: CustomScrollView(
+          controller: widget.controller,
+          slivers: <Widget>[
+            SliverAppBar(
+              title: Text(id),
+            ),
+            Consumer<CurrentComicModel>(
+              builder: (context, currentComicModel, child) {
+                if (currentComicModel.currentComic == null) {
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (BuildContext context, int index) {
+                        return const LinearProgressIndicator();
+                      },
+                      childCount: 1,
+                    ),
+                  );
+                }
+
                 final NHComic c = currentComicModel.currentComic!;
                 return SliverList(
                   delegate: SliverChildBuilderDelegate(
@@ -705,18 +789,10 @@ class ThirdScreen extends StatelessWidget {
                     childCount: currentComicModel.currentComic!.numPages,
                   ),
                 );
-              }
-              return SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (BuildContext context, int index) {
-                    return const LinearProgressIndicator();
-                  },
-                  childCount: 1,
-                ),
-              );
-            },
-          ),
-        ],
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -854,6 +930,18 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> {
+  final focusNode = FocusScopeNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // todo 20240313 try listen to the global focus change, unfocus when search bar's textfield is focused after returned
+    // use some workaround like FocusScope.of(context).unfocus();
+    WidgetsBinding.instance.focusManager.addListener(() {
+      // debugPrint("Focused on ${WidgetsBinding.instance.focusManager.primaryFocus?.toStringDeep()}");
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
@@ -875,68 +963,99 @@ class _AppState extends State<App> {
                   true, // We can also uncomment this line and set `pinned` to true to see a pinned search bar.
               snap: true,
               bottom: showLoadingIfNeeded(appModel.isLoading),
-              title: SearchAnchor.bar(
-                // barPadding: const MaterialStatePropertyAll<EdgeInsets>(EdgeInsets.symmetric(horizontal: 160, vertical: 0)),
-                searchController: appModel.searchController,
-                onSubmitted: (value) {
-                  appModel.searchController.closeView(value);
-                  if (appModel.navigationIndex != 0) {
-                    appModel.navigationIndex = 0;
+              title: FocusScope(
+                node: focusNode,
+                onFocusChange: (isFocused) {
+                  debugPrint('focused $isFocused');
+                  if (isFocused) {
+                    focusNode.unfocus();
                   }
-
-                  context.read<AppModel>().isLoading = true;
-                  context
-                      .read<ComicListModel>()
-                      .fetchSearch(q: value, clearComic: true)
-                      .then((value) =>
-                          context.read<AppModel>().isLoading = false);
-
-                  // Navigator.of(context).pop();
                 },
-                barTrailing: [
-                  // todo 20240302 remove splash effect? like gmail thing
-                  IconButton.filledTonal(
-                    onPressed: () {
-                      // todo 20240304 go to settings screen
-                      context.push('/settings');
-                    },
-                    icon: ClipOval(
-                      child: CachedNetworkImage(
-                        // get hash in the url: echo -n "someemail@email.com" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | openssl dgst -sha256
-                        imageUrl:
-                            "https://www.gravatar.com/avatar/b004c065bc529e98545e27af859152bb74007e535f2c149284117cfb520e76d6?d=retro&f=y",
-                        placeholder: (context, url) => Icon(
-                          Icons.person,
-                          color: Colors.grey.shade300,
+                child: SearchAnchor.bar(
+                  // barPadding: const MaterialStatePropertyAll<EdgeInsets>(EdgeInsets.symmetric(horizontal: 160, vertical: 0)),
+                  searchController: appModel.searchController,
+                  onSubmitted: (value) {
+                    appModel.searchController.closeView(value);
+                    if (appModel.navigationIndex != 0) {
+                      appModel.navigationIndex = 0;
+                    }
+
+                    context.read<AppModel>().isLoading = true;
+                    context
+                        .read<ComicListModel>()
+                        .fetchSearch(q: value, clearComic: true)
+                        .then((value) =>
+                            context.read<AppModel>().isLoading = false);
+                    Store.addSearchHistory(value);
+                    // Navigator.of(context).pop();
+                  },
+                  barTrailing: [
+                    // todo 20240302 remove splash effect? like gmail thing
+                    IconButton.filledTonal(
+                      onPressed: () {
+                        // todo 20240304 go to settings screen
+                        context.push('/settings');
+                      },
+                      icon: ClipOval(
+                        child: CachedNetworkImage(
+                          // get hash in the url: echo -n "someemail@email.com" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' | openssl dgst -sha256
+                          imageUrl:
+                              "https://www.gravatar.com/avatar/b004c065bc529e98545e27af859152bb74007e535f2c149284117cfb520e76d6?d=retro&f=y",
+                          placeholder: (context, url) => Icon(
+                            Icons.person,
+                            color: Colors.grey.shade300,
+                          ),
+                          height: IconTheme.of(context).size ?? 24,
                         ),
-                        height: IconTheme.of(context).size ?? 24,
                       ),
                     ),
-                  ),
-                  // IconButton(
+                    // IconButton(
+                    //   onPressed: () {},
+                    //   icon: const Icon(Icons.more_vert, color: Colors.black),
+                    // )
+                  ],
+                  // barLeading: IconButton(
                   //   onPressed: () {},
-                  //   icon: const Icon(Icons.more_vert, color: Colors.black),
-                  // )
-                ],
-                // barLeading: IconButton(
-                //   onPressed: () {},
-                //   icon: const Icon(Icons.search, color: Colors.black),
-                // ),
-                barHintText: "Search comic",
-                barElevation: MaterialStateProperty.all(0),
-                suggestionsBuilder:
-                    (BuildContext context, SearchController controller) {
-                  return List<Widget>.generate(
-                    5,
-                    (int index) {
-                      return ListTile(
-                        titleAlignment: ListTileTitleAlignment.center,
-                        title: Text('Initial list item $index'),
-                        onTap: () {},
-                      );
-                    },
-                  );
-                },
+                  //   icon: const Icon(Icons.search, color: Colors.black),
+                  // ),
+                  barHintText: "Search comic",
+                  barElevation: MaterialStateProperty.all(0),
+                  suggestionsBuilder:
+                      (BuildContext buildContext, SearchController controller) {
+                    return Store.getSearchHistory()
+                        .then((value) => value.map((e) => ListTile(
+                              titleAlignment: ListTileTitleAlignment.center,
+                              title: Text(e['query'] as String),
+                              subtitle: Text(e['created_at'] as String),
+                              onTap: () {
+                                // same with onSubmitted above
+                                appModel.searchController
+                                    .closeView(e['query'] as String);
+                                if (appModel.navigationIndex != 0) {
+                                  appModel.navigationIndex = 0;
+                                }
+
+                                context.read<AppModel>().isLoading = true;
+                                context
+                                    .read<ComicListModel>()
+                                    .fetchSearch(
+                                        q: e['query'] as String,
+                                        clearComic: true)
+                                    .then((value) => context
+                                        .read<AppModel>()
+                                        .isLoading = false);
+                                Store.addSearchHistory(e['query'] as String);
+                                // Navigator.of(context).pop();
+                              },
+                              onLongPress: () {
+                                Store.deleteSearchHistory(e['query'] as String);
+                                // touch appModel.searchController to refresh search history list
+                                appModel.searchController.text =
+                                    appModel.searchController.text;
+                              },
+                            )));
+                  },
+                ),
               ),
             );
           },

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:concept_nhv/model/data_model.dart';
@@ -8,10 +7,8 @@ import 'package:concept_nhv/model/state_model.dart';
 import 'package:concept_nhv/theme.dart';
 // import 'package:concept_nhv/sample.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -204,7 +201,9 @@ Future<void> main() async {
           GoRoute(
             name: 'third',
             path: '/third',
-            builder: (context, state) => const ThirdScreen(),
+            builder: (context, state) {
+              return ThirdScreen();
+            },
           ),
           GoRoute(
             name: 'settings',
@@ -235,50 +234,62 @@ class CollectionScreen extends StatelessWidget {
             snap: true,
             title: Text(collectionName),
           ),
-          FutureBuilder(
-            future: Store.getCollection(collectionName),
-            builder: (BuildContext context, AsyncSnapshot snapshot) {
-              if (!snapshot.hasData) {
-                return SliverList(
-                  delegate: SliverChildListDelegate(
-                    [],
-                  ),
-                );
-              }
-
-              List<Map<String, Object?>> collectedComics = snapshot.data;
-              for (var comic in collectedComics) {
-                // debugPrint(comic.toString());
-                debugPrint(comic['name'].toString());
-                debugPrint(comic['comicid'].toString());
-                debugPrint(comic['dateCreated'].toString());
-                debugPrint(comic['mid'].toString());
-                debugPrint("---");
-              }
-
-              List<ComicCover> favoriteComics = collectedComics.map((e) {
-                var images =
-                    NHImages.fromJson(jsonDecode(e['images'] as String));
-                return ComicCover(
-                  id: e['comicid'] as String,
-                  mediaId: e['mid'] as String,
-                  title: e['title'] as String,
-                  images: images,
-                  pages: e['pages'] as int,
-                  thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-                  thumbnailWidth: images.thumbnail!.w!,
-                  thumbnailHeight: images.thumbnail!.h!,
-                );
-              }).toList();
-
-              return ComicSliverGrid(
-                comics: favoriteComics,
-                comicsLoaded: favoriteComics.length,
-              );
-            },
+          CollectionSliver(
+            collectionName: collectionName,
           ),
         ],
       ),
+    );
+  }
+}
+
+class CollectionSliver extends StatelessWidget {
+  final String collectionName;
+
+  const CollectionSliver({super.key, required this.collectionName});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: Store.getCollection(collectionName),
+      builder: (BuildContext context, AsyncSnapshot snapshot) {
+        if (!snapshot.hasData) {
+          return SliverList(
+            delegate: SliverChildListDelegate(
+              [],
+            ),
+          );
+        }
+
+        List<Map<String, Object?>> collectedComics = snapshot.data;
+        for (var comic in collectedComics) {
+          // debugPrint(comic.toString());
+          debugPrint(comic['name'].toString());
+          debugPrint(comic['comicid'].toString());
+          debugPrint(comic['dateCreated'].toString());
+          debugPrint(comic['mid'].toString());
+          debugPrint("---");
+        }
+
+        List<ComicCover> favoriteComics = collectedComics.map((e) {
+          var images = NHImages.fromJson(jsonDecode(e['images'] as String));
+          return ComicCover(
+            id: e['comicid'] as String,
+            mediaId: e['mid'] as String,
+            title: e['title'] as String,
+            images: images,
+            pages: e['pages'] as int,
+            thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+            thumbnailWidth: images.thumbnail!.w!,
+            thumbnailHeight: images.thumbnail!.h!,
+          );
+        }).toList();
+
+        return ComicSliverGrid(
+          comics: favoriteComics,
+          comicsLoaded: favoriteComics.length,
+        );
+      },
     );
   }
 }
@@ -314,9 +325,9 @@ class CollectionListScreen extends StatelessWidget {
             .toList();
 
         List<CollectionCover> collections = {
-          'Favorite': favorite,
+          'History': history,
           'Next': next,
-          'History': history
+          'Favorite': favorite,
         }.entries.map((e) {
           final firstItem = e.value.firstOrNull;
           if (firstItem == null) {
@@ -488,6 +499,43 @@ class Store {
     return ("", "");
   }
 
+  static Future<int> deleteCFCookies() async {
+    final db = await _database;
+    final rowsDeleted = await db.delete(
+      'Options',
+      where: 'name = ? OR name = ?',
+      whereArgs: ['userAgent', 'token'],
+    );
+
+    return rowsDeleted;
+  }
+
+  static Future<void> setOption(String name, String value) async {
+    final db = await _database;
+    await db.insert(
+      'Options',
+      {
+        'name': name,
+        'value': value,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<String> getOption(String name) async {
+    final db = await _database;
+    final option = await db.query(
+      'Options',
+      where: 'name = ?',
+      whereArgs: [name],
+    );
+    if (option.isNotEmpty) {
+      return option.first['value'] as String;
+    }
+
+    return "";
+  }
+
   // Note that old nhviewer does not store thumbnail
   static Future<int> addComic({
     required String id,
@@ -624,7 +672,7 @@ class FirstScreen extends StatelessWidget {
     if (agent.isEmpty || token.isEmpty) {
       return false;
     }
-    debugPrint("User agent and token ok!");
+    debugPrint("Found user agent and token! testing...");
 
     final dio = Dio();
     const url = "https://nhentai.net";
@@ -635,7 +683,9 @@ class FirstScreen extends StatelessWidget {
             HttpHeaders.cookieHeader: "cf_clearance=$token",
           }));
     } on DioException catch (e) {
-      debugPrint("DioException: status code=${e.response?.statusCode}");
+      debugPrint(
+          "testing failed. DioException: status code=${e.response?.statusCode}");
+      await Store.deleteCFCookies();
       return false;
     }
 
@@ -722,34 +772,73 @@ class IndexScreen extends StatelessWidget {
   }
 }
 
-class ThirdScreen extends StatefulWidget {
+class ThirdScreen extends StatelessWidget {
   ScrollController? controller = ScrollController();
 
-  ThirdScreen({super.key, this.controller});
+  ThirdScreen({super.key});
 
-  @override
-  State<ThirdScreen> createState() => _ThirdScreenState();
-}
-
-class _ThirdScreenState extends State<ThirdScreen> {
   @override
   Widget build(BuildContext context) {
     Map<String, String> query = GoRouterState.of(context).uri.queryParameters;
     final id = query['id']!;
 
-    return PopScope(
-      onPopInvoked: (didPop) {
-        debugPrint("onPopInvoked $didPop");
-        // if (didPop) {
-        //   widget.controller?.jumpTo(0);
-        // }
-      },
-      child: Scaffold(
-        body: CustomScrollView(
-          controller: widget.controller,
+    // todo 20240321 show some hints (snackbar?) and a button to restart reading
+    // go to last seen page if any
+    Store.getOption("lastSeenOffset-$id").then((lastSeenOffset) {
+      debugPrint("getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
+      controller?.animateTo(
+        double.parse(lastSeenOffset),
+        duration: const Duration(milliseconds: 1000),
+        curve: Curves.easeInOut,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Loaded last seen page"),
+          action: SnackBarAction(
+            label: "Back to top",
+            onPressed: () => controller?.jumpTo(0),
+          ),
+          // behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    });
+
+    return Scaffold(
+      body: NotificationListener(
+        onNotification: (notification) {
+          if (notification is ScrollEndNotification) {
+            if (controller!.offset != 0) {
+              Store.setOption(
+                  "lastSeenOffset-$id", controller!.offset.toString());
+              debugPrint(
+                  "setOption lastSeenOffset-$id ${controller!.offset.toString()}");
+            }
+          }
+          return false; // Return true if the notification should be canceled.
+        },
+        child: CustomScrollView(
+          controller: controller,
           slivers: <Widget>[
             SliverAppBar(
               title: Text(id),
+              // todo 20240322 allow add to collection when viewing comic, required mid+title+pages+comic.images
+              // actions: [
+              //   IconButton(
+              //     icon: const Icon(Icons.favorite_outline),
+              //     onPressed: () {
+              //       Store.addComic(
+              //         id: id,
+              //         mid: mid,
+              //         title: title,
+              //         pages: pages,
+              //         images: jsonEncode(comic.images.toJson()),
+              //       );
+              //       Store.collectComic(collectionName: 'Favorite', id: id);
+              //     },
+              //   ),
+              // ],
             ),
             Consumer<CurrentComicModel>(
               builder: (context, currentComicModel, child) {
@@ -975,6 +1064,25 @@ class _AppState extends State<App> {
                   // barPadding: const MaterialStatePropertyAll<EdgeInsets>(EdgeInsets.symmetric(horizontal: 160, vertical: 0)),
                   searchController: appModel.searchController,
                   onSubmitted: (value) {
+                    Store.addSearchHistory(value);
+
+                    // check if numeric, which means comic id
+                    if (int.tryParse(value) != null) {
+                      final id = value;
+                      Provider.of<CurrentComicModel>(context, listen: false)
+                          .fetchComic(id);
+                      context
+                          .push(Uri(path: '/third', queryParameters: {'id': id})
+                              .toString())
+                          .then((_) {
+                        Provider.of<CurrentComicModel>(context, listen: false)
+                            .clearComic();
+                        appModel.searchController.text =
+                            appModel.searchController.text;
+                      });
+                      return;
+                    }
+
                     appModel.searchController.closeView(value);
                     if (appModel.navigationIndex != 0) {
                       appModel.navigationIndex = 0;
@@ -986,7 +1094,6 @@ class _AppState extends State<App> {
                         .fetchSearch(q: value, clearComic: true)
                         .then((value) =>
                             context.read<AppModel>().isLoading = false);
-                    Store.addSearchHistory(value);
                     // Navigator.of(context).pop();
                   },
                   barTrailing: [
@@ -1026,11 +1133,37 @@ class _AppState extends State<App> {
                         .then((value) => value.map((e) => ListTile(
                               titleAlignment: ListTileTitleAlignment.center,
                               title: Text(e['query'] as String),
-                              subtitle: Text(e['created_at'] as String),
+                              trailing: Text(DateTime.parse(
+                                      "${e['created_at'] as String}Z")
+                                  .toLocal()
+                                  .toString()),
                               onTap: () {
                                 // same with onSubmitted above
-                                appModel.searchController
-                                    .closeView(e['query'] as String);
+                                final value = e['query'] as String;
+                                Store.addSearchHistory(value);
+
+                                // check if numeric, which means comic id
+                                if (int.tryParse(value) != null) {
+                                  final id = value;
+                                  Provider.of<CurrentComicModel>(context,
+                                          listen: false)
+                                      .fetchComic(id);
+                                  context
+                                      .push(Uri(
+                                              path: '/third',
+                                              queryParameters: {'id': id})
+                                          .toString())
+                                      .then((_) {
+                                    Provider.of<CurrentComicModel>(context,
+                                            listen: false)
+                                        .clearComic();
+                                    appModel.searchController.text =
+                                        appModel.searchController.text;
+                                  });
+                                  return;
+                                }
+
+                                appModel.searchController.closeView(value);
                                 if (appModel.navigationIndex != 0) {
                                   appModel.navigationIndex = 0;
                                 }
@@ -1038,13 +1171,10 @@ class _AppState extends State<App> {
                                 context.read<AppModel>().isLoading = true;
                                 context
                                     .read<ComicListModel>()
-                                    .fetchSearch(
-                                        q: e['query'] as String,
-                                        clearComic: true)
+                                    .fetchSearch(q: value, clearComic: true)
                                     .then((value) => context
                                         .read<AppModel>()
                                         .isLoading = false);
-                                Store.addSearchHistory(e['query'] as String);
                                 // Navigator.of(context).pop();
                               },
                               onLongPress: () {
@@ -1091,6 +1221,10 @@ class _AppState extends State<App> {
                   pageLoaded: comicListModel.pageLoaded);
             },
           ),
+          const CollectionSliver(
+            collectionName: 'Favorite',
+          ),
+          /* 
           FutureBuilder(
             // todo 20240304 store future in state_model, refresh when clicked navigation bar
             future: Store.getCollection('Favorite'),
@@ -1134,6 +1268,8 @@ class _AppState extends State<App> {
               );
             },
           ),
+ */
+
           // SliverList(
           //   delegate: SliverChildListDelegate(
           //     [
@@ -1319,7 +1455,7 @@ class ComicListItem extends StatelessWidget {
             clipBehavior: Clip.hardEdge,
             child: InkWell(
               splashColor: Colors.blue.withAlpha(30),
-              onTap: () async {
+              onTap: () {
                 Provider.of<CurrentComicModel>(context, listen: false)
                     .fetchComic(id);
                 context

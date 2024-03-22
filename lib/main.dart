@@ -202,6 +202,29 @@ Future<void> main() async {
             name: 'third',
             path: '/third',
             builder: (context, state) {
+              final id = state.uri.queryParameters['id'] ?? '';
+              Store.getOption("lastSeenOffset-$id").then((lastSeenOffset) {
+                debugPrint(
+                    "getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
+                context.read<CurrentComicModel>().scrollController?.animateTo(
+                  double.parse(lastSeenOffset),
+                  duration: const Duration(milliseconds: 1000),
+                  curve: Curves.easeInOut,
+                );
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text("Loaded last seen page"),
+                    action: SnackBarAction(
+                      label: "Back to top",
+                      onPressed: () => context.read<CurrentComicModel>().scrollController?.jumpTo(0),
+                    ),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              });
+
               return ThirdScreen();
             },
           ),
@@ -773,8 +796,6 @@ class IndexScreen extends StatelessWidget {
 }
 
 class ThirdScreen extends StatelessWidget {
-  ScrollController? controller = ScrollController();
-
   ThirdScreen({super.key});
 
   @override
@@ -782,44 +803,21 @@ class ThirdScreen extends StatelessWidget {
     Map<String, String> query = GoRouterState.of(context).uri.queryParameters;
     final id = query['id']!;
 
-    // todo 20240321 show some hints (snackbar?) and a button to restart reading
-    // go to last seen page if any
-    Store.getOption("lastSeenOffset-$id").then((lastSeenOffset) {
-      debugPrint("getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
-      controller?.animateTo(
-        double.parse(lastSeenOffset),
-        duration: const Duration(milliseconds: 1000),
-        curve: Curves.easeInOut,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Loaded last seen page"),
-          action: SnackBarAction(
-            label: "Back to top",
-            onPressed: () => controller?.jumpTo(0),
-          ),
-          // behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    });
-
     return Scaffold(
       body: NotificationListener(
         onNotification: (notification) {
           if (notification is ScrollEndNotification) {
-            if (controller!.offset != 0) {
+            if (context.read<CurrentComicModel>().scrollController.offset != 0) {
               Store.setOption(
-                  "lastSeenOffset-$id", controller!.offset.toString());
+                  "lastSeenOffset-$id", context.read<CurrentComicModel>().scrollController.offset.toString());
               debugPrint(
-                  "setOption lastSeenOffset-$id ${controller!.offset.toString()}");
+                  "setOption lastSeenOffset-$id ${context.read<CurrentComicModel>().scrollController.offset.toString()}");
             }
           }
           return false; // Return true if the notification should be canceled.
         },
         child: CustomScrollView(
-          controller: controller,
+          controller: context.read<CurrentComicModel>().scrollController,
           slivers: <Widget>[
             SliverAppBar(
               title: Text(id),

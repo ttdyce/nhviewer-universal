@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:concept_nhv/main.dart';
 import 'package:concept_nhv/model/data_model.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class AppModel extends ChangeNotifier {
@@ -174,6 +175,7 @@ class ComicListModel extends ChangeNotifier {
 }
 
 class CurrentComicModel extends ChangeNotifier {
+  ScrollController scrollController = ScrollController();
   NHComic? _currentComic;
 
   NHComic? get currentComic => _currentComic;
@@ -226,6 +228,6 @@ class CurrentComicModel extends ChangeNotifier {
 
   void clearComic() {
     currentComic = null;
-    notifyListeners();
+    // notifyListeners();
   }
 }

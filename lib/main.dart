@@ -110,6 +110,7 @@ Future<void> main() async {
                   builder: (context, appModel, child) {
                     return NavigationBar(
                       onDestinationSelected: (int index) {
+                        debugPrint('debug clicked $index');
                         // context.goNamed('index');
                         if (appModel.searchController.isOpen) {
                           appModel.searchController.text = '';
@@ -145,20 +146,20 @@ Future<void> main() async {
                           },
                           1: () {
                             appModel.navigationIndex = index;
+                            context
+                                .read<ComicListModel>()
+                                .fetchEveryCollectionFuture();
                           },
                           2: () {
                             appModel.navigationIndex = index;
-                            context.read<AppModel>().isLoading = true;
                             context
                                 .read<ComicListModel>()
-                                .fetchCollections()
-                                .then((value) =>
-                                    context.read<AppModel>().isLoading = false);
+                                .fetchEveryCollectionFuture();
                           },
                         };
                         screens[index]?.call();
+                        context.goNamed('index');
 
-                        debugPrint('debug clicked $index');
                         HapticFeedback.lightImpact();
                       },
                       // indicatorColor: Colors.amber,
@@ -207,17 +208,20 @@ Future<void> main() async {
                 debugPrint(
                     "getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
                 context.read<CurrentComicModel>().scrollController?.animateTo(
-                  double.parse(lastSeenOffset),
-                  duration: const Duration(milliseconds: 1000),
-                  curve: Curves.easeInOut,
-                );
+                      double.parse(lastSeenOffset),
+                      duration: const Duration(milliseconds: 1000),
+                      curve: Curves.easeInOut,
+                    );
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: const Text("Loaded last seen page"),
                     action: SnackBarAction(
                       label: "Back to top",
-                      onPressed: () => context.read<CurrentComicModel>().scrollController?.jumpTo(0),
+                      onPressed: () => context
+                          .read<CurrentComicModel>()
+                          .scrollController
+                          ?.jumpTo(0),
                     ),
                     behavior: SnackBarBehavior.floating,
                     duration: const Duration(seconds: 3),
@@ -273,46 +277,59 @@ class CollectionSliver extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: Store.getCollection(collectionName),
-      builder: (BuildContext context, AsyncSnapshot snapshot) {
-        if (!snapshot.hasData) {
-          return SliverList(
-            delegate: SliverChildListDelegate(
-              [],
-            ),
+    return Consumer<ComicListModel>(
+      builder: (context, comicListModel, child) => FutureBuilder(
+        future: comicListModel.everyCollectionFuture,
+        builder: (BuildContext context, AsyncSnapshot snapshot) {
+          if (!snapshot.hasData) {
+            return const SliverFillRemaining(
+              hasScrollBody: false,
+            );
+          }
+
+          List<Map<String, Object?>> everyCollectedComics = snapshot.data;
+          List<Map<String, Object?>> collectedComics = everyCollectedComics
+              .where((element) => element['name'] == collectionName)
+              .toList();
+
+          if (collectedComics.isEmpty) {
+            return SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text("No comics in $collectionName"),
+              ),
+            );
+          }
+          for (var comic in collectedComics) {
+            // debugPrint(comic.toString());
+            debugPrint(comic['name'].toString());
+            debugPrint(comic['comicid'].toString());
+            debugPrint(comic['dateCreated'].toString());
+            debugPrint(comic['mid'].toString());
+            debugPrint("---");
+          }
+
+          List<ComicCover> collectionComics = collectedComics.map((e) {
+            var images = NHImages.fromJson(jsonDecode(e['images'] as String));
+            return ComicCover(
+              id: e['comicid'] as String,
+              mediaId: e['mid'] as String,
+              title: e['title'] as String,
+              images: images,
+              pages: e['pages'] as int,
+              thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+              thumbnailWidth: images.thumbnail!.w!,
+              thumbnailHeight: images.thumbnail!.h!,
+            );
+          }).toList();
+
+          return ComicSliverGrid(
+            comics: collectionComics,
+            comicsLoaded: collectionComics.length,
+            collectionName: collectionName,
           );
-        }
-
-        List<Map<String, Object?>> collectedComics = snapshot.data;
-        for (var comic in collectedComics) {
-          // debugPrint(comic.toString());
-          debugPrint(comic['name'].toString());
-          debugPrint(comic['comicid'].toString());
-          debugPrint(comic['dateCreated'].toString());
-          debugPrint(comic['mid'].toString());
-          debugPrint("---");
-        }
-
-        List<ComicCover> favoriteComics = collectedComics.map((e) {
-          var images = NHImages.fromJson(jsonDecode(e['images'] as String));
-          return ComicCover(
-            id: e['comicid'] as String,
-            mediaId: e['mid'] as String,
-            title: e['title'] as String,
-            images: images,
-            pages: e['pages'] as int,
-            thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-            thumbnailWidth: images.thumbnail!.w!,
-            thumbnailHeight: images.thumbnail!.h!,
-          );
-        }).toList();
-
-        return ComicSliverGrid(
-          comics: favoriteComics,
-          comicsLoaded: favoriteComics.length,
-        );
-      },
+        },
+      ),
     );
   }
 }
@@ -323,58 +340,64 @@ class CollectionListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Consumer<ComicListModel>(
-      builder:
-          (BuildContext context, ComicListModel comicListModel, Widget? child) {
-        List<Map<String, Object?>> collectedComics =
-            comicListModel.everyCollection;
+      builder: (context, comicListModel, child) => FutureBuilder(
+          future: comicListModel.everyCollectionFuture,
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SliverFillRemaining(
+                hasScrollBody: false,
+              );
+            }
 
-        for (var comic in collectedComics) {
-          // debugPrint(comic.toString());
-          debugPrint(comic['name'].toString());
-          debugPrint(comic['comicid'].toString());
-          debugPrint(comic['dateCreated'].toString());
-          debugPrint(comic['mid'].toString());
-          debugPrint("---");
-        }
+            List<Map<String, Object?>> collectedComics = snapshot.requireData;
 
-        final favorite = collectedComics
-            .where((element) => element['name'] == 'Favorite')
-            .toList();
-        final next = collectedComics
-            .where((element) => element['name'] == 'Next')
-            .toList();
-        final history = collectedComics
-            .where((element) => element['name'] == 'History')
-            .toList();
+            for (var comic in collectedComics) {
+              // debugPrint(comic.toString());
+              debugPrint(comic['name'].toString());
+              debugPrint(comic['comicid'].toString());
+              debugPrint(comic['dateCreated'].toString());
+              debugPrint(comic['mid'].toString());
+              debugPrint("---");
+            }
 
-        List<CollectionCover> collections = {
-          'History': history,
-          'Next': next,
-          'Favorite': favorite,
-        }.entries.map((e) {
-          final firstItem = e.value.firstOrNull;
-          if (firstItem == null) {
-            return CollectionCover.emptyCollection(
-              collectionName: e.key,
+            final favorite = collectedComics
+                .where((element) => element['name'] == 'Favorite')
+                .toList();
+            final next = collectedComics
+                .where((element) => element['name'] == 'Next')
+                .toList();
+            final history = collectedComics
+                .where((element) => element['name'] == 'History')
+                .toList();
+
+            List<CollectionCover> collections = {
+              'History': history,
+              'Next': next,
+              'Favorite': favorite,
+            }.entries.map((e) {
+              final firstItem = e.value.firstOrNull;
+              if (firstItem == null) {
+                return CollectionCover.emptyCollection(
+                  collectionName: e.key,
+                );
+              }
+              final mid = firstItem['mid'] as String;
+              var images =
+                  NHImages.fromJson(jsonDecode(firstItem['images'] as String));
+              return CollectionCover(
+                mid: mid,
+                collectionName: firstItem['name'] as String,
+                collectedCount: e.value.length,
+                thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+                thumbnailWidth: images.thumbnail!.w!,
+                thumbnailHeight: images.thumbnail!.h!,
+              );
+            }).toList();
+
+            return CollectionSliverGrid(
+              collections: collections,
             );
-          }
-          final mid = firstItem['mid'] as String;
-          var images =
-              NHImages.fromJson(jsonDecode(firstItem['images'] as String));
-          return CollectionCover(
-            mid: mid,
-            collectionName: firstItem['name'] as String,
-            collectedCount: e.value.length,
-            thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-            thumbnailWidth: images.thumbnail!.w!,
-            thumbnailHeight: images.thumbnail!.h!,
-          );
-        }).toList();
-
-        return CollectionSliverGrid(
-          collections: collections,
-        );
-      },
+          }),
     );
   }
 }
@@ -598,6 +621,27 @@ class Store {
     );
   }
 
+  static Future<int> uncollectComic({
+    required String collectionName,
+    required String id,
+  }) async {
+    final db = await _database;
+    return db.delete(
+      'Collection',
+      where: 'name = ? AND comicid = ?',
+      whereArgs: [collectionName, id],
+    );
+    //   return db.insert(
+    //     'Collection',
+    //     {
+    //       'name': collectionName,
+    //       'comicid': id,
+    //       'dateCreated': DateTime.now().toIso8601String(),
+    //     },
+    //     conflictAlgorithm: ConflictAlgorithm.replace,
+    //   );
+  }
+
   static Future<void> getComic() async {
     final db = await _database;
     final comics = await db.query('Comic');
@@ -610,8 +654,6 @@ class Store {
       String collectionName) async {
     debugPrint("get collection: $collectionName");
     final db = await _database;
-    // final List<Map<String, Object?>> collectedComics = await db
-    //     .query('Collection', where: 'name = ?', whereArgs: [collectionName]);
     final List<Map<String, Object?>> collectedComics = await db.rawQuery(
         "select * from Collection col left join Comic com on col.comicid = com.id where col.name = '$collectionName' order by dateCreated desc");
 
@@ -807,9 +849,15 @@ class ThirdScreen extends StatelessWidget {
       body: NotificationListener(
         onNotification: (notification) {
           if (notification is ScrollEndNotification) {
-            if (context.read<CurrentComicModel>().scrollController.offset != 0) {
+            if (context.read<CurrentComicModel>().scrollController.offset !=
+                0) {
               Store.setOption(
-                  "lastSeenOffset-$id", context.read<CurrentComicModel>().scrollController.offset.toString());
+                  "lastSeenOffset-$id",
+                  context
+                      .read<CurrentComicModel>()
+                      .scrollController
+                      .offset
+                      .toString());
               debugPrint(
                   "setOption lastSeenOffset-$id ${context.read<CurrentComicModel>().scrollController.offset.toString()}");
             }
@@ -1203,20 +1251,22 @@ class _AppState extends State<App> {
               }
 
               return ComicSliverGrid(
-                  comics: comicListModel.comics!
-                      .map((e) => ComicCover(
-                            id: e.id!,
-                            mediaId: e.mediaId!,
-                            title: e.title!.english!,
-                            images: e.images!,
-                            pages: e.numPages!,
-                            thumbnailExt: App.extMap[e.images!.thumbnail!.t!]!,
-                            thumbnailWidth: e.images!.thumbnail!.w!,
-                            thumbnailHeight: e.images!.thumbnail!.h!,
-                          ))
-                      .toList(),
-                  comicsLoaded: comicListModel.comicsLoaded,
-                  pageLoaded: comicListModel.pageLoaded);
+                comics: comicListModel.comics!
+                    .map((e) => ComicCover(
+                          id: e.id!,
+                          mediaId: e.mediaId!,
+                          title: e.title!.english!,
+                          images: e.images!,
+                          pages: e.numPages!,
+                          thumbnailExt: App.extMap[e.images!.thumbnail!.t!]!,
+                          thumbnailWidth: e.images!.thumbnail!.w!,
+                          thumbnailHeight: e.images!.thumbnail!.h!,
+                        ))
+                    .toList(),
+                comicsLoaded: comicListModel.comicsLoaded,
+                pageLoaded: comicListModel.pageLoaded,
+                collectionName: '#index',
+              );
             },
           ),
           const CollectionSliver(
@@ -1336,12 +1386,14 @@ class ComicSliverGrid extends StatelessWidget {
   final int comicsLoaded;
   // local comics does not have page
   final int? pageLoaded;
+  final String collectionName;
 
   const ComicSliverGrid({
     super.key,
     required this.comics,
     required this.comicsLoaded,
     this.pageLoaded,
+    required this.collectionName,
   });
 
   @override
@@ -1401,14 +1453,16 @@ class ComicSliverGrid extends StatelessWidget {
           debugPrint("https://t.nhentai.net/galleries/$mid/thumb.$ext");
 
           return ComicListItem(
-              id: id,
-              thumbnailLink: thumbnailLink,
-              thumbnailWidth: thumbnailWidth,
-              thumbnailHeight: thumbnailHeight,
-              title: title,
-              mid: mid,
-              pages: pages,
-              comic: comic);
+            id: id,
+            thumbnailLink: thumbnailLink,
+            thumbnailWidth: thumbnailWidth,
+            thumbnailHeight: thumbnailHeight,
+            title: title,
+            mid: mid,
+            pages: pages,
+            comic: comic,
+            collectionName: collectionName,
+          );
         },
         // childCount: 1,
         childCount: comicsLoaded,
@@ -1429,6 +1483,7 @@ class ComicListItem extends StatelessWidget {
     required this.mid,
     required this.pages,
     required this.comic,
+    required this.collectionName,
   });
 
   final String id;
@@ -1439,6 +1494,7 @@ class ComicListItem extends StatelessWidget {
   final String mid;
   final int pages;
   final ComicCover comic;
+  final String collectionName;
 
   @override
   Widget build(BuildContext context) {
@@ -1462,6 +1518,75 @@ class ComicListItem extends StatelessWidget {
                     .then((_) =>
                         Provider.of<CurrentComicModel>(context, listen: false)
                             .clearComic());
+              },
+              onLongPress: () {
+                // todo store collection name in upper state
+                // pop up an dialog, if confirm, delete comic
+                if (collectionName.isNotEmpty &&
+                    !collectionName.startsWith('#')) {
+                  showDialog<bool>(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title:
+                              Text("Remove this comic from $collectionName?"),
+                          content: Text(
+                            "Careful! You can't undo this action. You are removing: $title",
+                          ),
+                          actions: [
+                            TextButton(
+                              child: const Text('Cancel'),
+                              onPressed: () {
+                                Navigator.of(context).pop(false);
+                              },
+                            ),
+                            TextButton(
+                              child: const Text('REMOVE'),
+                              onPressed: () {
+                                Store.uncollectComic(
+                                  collectionName: collectionName,
+                                  id: id,
+                                );
+                                context
+                                    .read<ComicListModel>()
+                                    .fetchEveryCollectionFuture();
+                                // todo 20240324 consider to show a snackbar for "redo" delete
+
+                                Navigator.of(context).pop(true);
+                              },
+                            ),
+                          ],
+                          // children: [
+                          //   SimpleDialogOption(
+                          //     child: const Text('Yes'),
+                          //     onPressed: () {
+                          //       Store.uncollectComic(
+                          //         collectionName: collectionName,
+                          //         id: id,
+                          //       );
+                          //       ScaffoldMessenger.of(context).showSnackBar(
+                          //         SnackBar(
+                          //           content: Text(
+                          //             "Deleted from $collectionName, named $title",
+                          //           ),
+                          //         ),
+                          //       );
+                          //       debugPrint(
+                          //         "comic $id removed from $collectionName",
+                          //       );
+                          //       Navigator.of(context).pop(true);
+                          //     },
+                          //   ),
+                          //   SimpleDialogOption(
+                          //     child: const Text('No'),
+                          //     onPressed: () {
+                          //       Navigator.of(context).pop(false);
+                          //     },
+                          //   ),
+                          // ],
+                        );
+                      });
+                }
               },
               child: SimpleCachedNetworkImage(
                 url: thumbnailLink,
@@ -1490,6 +1615,13 @@ class ComicListItem extends StatelessWidget {
                   images: jsonEncode(comic.images.toJson()),
                 );
                 Store.collectComic(collectionName: 'Next', id: id);
+
+                HapticFeedback.lightImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Added comic to Next'),
+                  ),
+                );
               },
             ),
             Text("${pages}p"),
@@ -1504,6 +1636,13 @@ class ComicListItem extends StatelessWidget {
                   images: jsonEncode(comic.images.toJson()),
                 );
                 Store.collectComic(collectionName: 'Favorite', id: id);
+
+                HapticFeedback.lightImpact();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Added comic to Favorite'),
+                  ),
+                );
               },
             ),
           ],
@@ -1559,13 +1698,12 @@ class CollectionSliverGrid extends StatelessWidget {
                       //         .toString());
                       // Provider.of<CurrentComicModel>(context, listen: false)
                       //     .clearComic();
+                      debugPrint('debug clicked $collectionName');
                       context.push(
                         Uri(path: '/collection', queryParameters: {
                           'collectionName': collectionName
                         }).toString(),
                       );
-
-                      debugPrint('debug clicked $collectionName');
                     },
                     child: SimpleCachedNetworkImage(
                       url: thumbnailLink,

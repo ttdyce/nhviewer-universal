@@ -33,7 +33,7 @@ class AppModel extends ChangeNotifier {
 
 class ComicListModel extends ChangeNotifier {
   final List<NHList> _fetchedComics = [];
-  final List<Map<String, Object?>> everyCollection = [];
+  Future<List<Map<String, Object?>>>? everyCollectionFuture;
 
   // todo 20240211 is exposing $page problematic?
   int pageLoaded = 1;
@@ -65,9 +65,8 @@ class ComicListModel extends ChangeNotifier {
     });
   }
 
-  fetchCollections() async {
-    everyCollection.clear();
-    everyCollection.addAll(await Store.getEveryCollection());
+  void fetchEveryCollectionFuture(){
+    everyCollectionFuture = Store.getEveryCollection();
     notifyListeners();
   }
 

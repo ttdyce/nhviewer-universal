@@ -434,7 +434,8 @@ enum NHLanguage {
     }
   }
 
-  static NHLanguage current = NHLanguage.chinese;
+  // todo 20240330 change default to read from settings and persist to settings
+  static NHLanguage current = NHLanguage.all;
 }
 
 class NHPopularType {
@@ -792,11 +793,14 @@ class FirstScreen extends StatelessWidget {
                 onPageFinished: (String url) async {
                   context.read<AppModel>().isLoading = true;
                   // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
-                  // todo 20240318 one of the options is to setstate(() => {}) to recheck cookie. But it may loop forever.
                   final (_, token) = await receiveCFCookies(
                       controller,
                       Provider.of<ComicListModel>(context, listen: false)
                           .fetchIndex);
+                  //retest new cookie
+                  if (await testLastCFCookies()) {
+                    return;
+                  }
                   if (!context.mounted || token.isEmpty) return;
                   context.read<AppModel>().isLoading = false;
                   context.go('/index');

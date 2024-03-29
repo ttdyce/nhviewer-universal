@@ -19,10 +19,10 @@
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
 [![Contributors][contributors-shield]][contributors-url]
+[![MIT License][license-shield]][license-url]
 <!-- [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url] -->
-[![MIT License][license-shield]][license-url]
 <!-- [![LinkedIn][linkedin-shield]][linkedin-url] -->
 
 
@@ -164,7 +164,7 @@ Big Thanks!
 [issues-shield]: https://img.shields.io/github/issues/ttdyce/nhviewer-universal.svg?style=for-the-badge
 [issues-url]: https://github.com/ttdyce/nhviewer-universal/issues
 [license-shield]: https://img.shields.io/github/license/ttdyce/nhviewer-universal.svg?style=for-the-badge
-[license-url]: https://github.com/ttdyce/nhviewer-universal/blob/master/LICENSE.txt
+[license-url]: https://github.com/ttdyce/nhviewer-universal/blob/main/LICENSE.txt
 [product-screenshot]: images/screenshot.png
 [Flutter]: https://img.shields.io/badge/flutter-blue?style=for-the-badge&logo=flutter
 [Flutter-url]: https://Flutter.dev/

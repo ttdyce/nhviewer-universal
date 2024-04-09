@@ -798,7 +798,7 @@ class FirstScreen extends StatelessWidget {
                       Provider.of<ComicListModel>(context, listen: false)
                           .fetchIndex);
                   //retest new cookie
-                  if (await testLastCFCookies()) {
+                  if (!await testLastCFCookies()) {
                     return;
                   }
                   if (!context.mounted || token.isEmpty) return;

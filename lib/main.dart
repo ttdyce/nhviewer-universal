@@ -207,11 +207,13 @@ Future<void> main() async {
               Store.getOption("lastSeenOffset-$id").then((lastSeenOffset) {
                 debugPrint(
                     "getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
-                context.read<CurrentComicModel>().scrollController?.animateTo(
-                      double.parse(lastSeenOffset),
-                      duration: const Duration(milliseconds: 1000),
-                      curve: Curves.easeInOut,
-                    );
+                if (lastSeenOffset.isNotEmpty) {
+                  context.read<CurrentComicModel>().scrollController.animateTo(
+                        double.parse(lastSeenOffset),
+                        duration: const Duration(milliseconds: 1000),
+                        curve: Curves.easeInOut,
+                      );
+                }
 
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

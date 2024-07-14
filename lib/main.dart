@@ -738,9 +738,11 @@ class FirstScreen extends StatelessWidget {
     debugPrint("testLastCFCookies...");
     final (agent, token) = await Store.getCFCookies();
     if (agent.isEmpty || token.isEmpty) {
-      return false;
+      debugPrint("Found abnormal user agent and token! still testing...");
+      // return false;
+    }else {
+      debugPrint("Found user agent and token! testing...");
     }
-    debugPrint("Found user agent and token! testing...");
 
     final dio = Dio();
     const url = "https://nhentai.net";

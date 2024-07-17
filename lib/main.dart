@@ -54,7 +54,7 @@ Future<void> main() async {
                         // mostly same with FAB press below, here it change to NHPopularType.allTime
                         final sortByPopularType =
                             context.read<ComicListModel>().sortByPopularType;
-                        if (sortByPopularType == null) {
+                        if (sortByPopularType != NHPopularType.allTime) {
                           context.read<ComicListModel>().sortByPopularType =
                               NHPopularType.allTime;
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -80,7 +80,7 @@ Future<void> main() async {
                           // logic is not straight forward here
                           final sortByPopularType =
                               context.read<ComicListModel>().sortByPopularType;
-                          if (sortByPopularType == null) {
+                          if (sortByPopularType != NHPopularType.month) {
                             context.read<ComicListModel>().sortByPopularType =
                                 NHPopularType.month;
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -738,10 +738,10 @@ class FirstScreen extends StatelessWidget {
     debugPrint("testLastCFCookies...");
     final (agent, token) = await Store.getCFCookies();
     if (agent.isEmpty || token.isEmpty) {
-      debugPrint("Found abnormal user agent and token! still testing...");
+      debugPrint("Note: Found empty user agent or token, still testing...");
       // return false;
-    }else {
-      debugPrint("Found user agent and token! testing...");
+    } else {
+      debugPrint("Found previous user agent and token! testing...");
     }
 
     final dio = Dio();
@@ -768,70 +768,89 @@ class FirstScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = WebViewController();
 
-    return FutureBuilder(
-      future: testLastCFCookies(),
-      builder: (BuildContext context, AsyncSnapshot snapshot) {
-        if (!snapshot.hasData) {
-          // todo 20240304 Show splash screen while testing existing CFCookies
-          return const Center(child: CircularProgressIndicator());
-        }
+    return Scaffold(
+      body: FutureBuilder(
+        future: testLastCFCookies(),
+        builder: (BuildContext context, AsyncSnapshot snapshot) {
+          if (!snapshot.hasData) {
+            // todo 20240304 Show splash screen while testing existing CFCookies
+            return const Center(
+                child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                CircularProgressIndicator(),
+                Text(
+                  'Loading...',
+                ),
+              ],
+            ));
+          }
 
-        final bool hasCFCookies = snapshot.data;
-        if (hasCFCookies) {
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            context.read<AppModel>().isLoading = true;
-            await context.read<ComicListModel>().fetchIndex();
-            if (!context.mounted) return;
-            context.read<AppModel>().isLoading = false;
-            context.go('/index');
-          });
+          final bool passTest = snapshot.data;
+          if (passTest) {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              context.read<AppModel>().isLoading = true;
+              await context.read<ComicListModel>().fetchIndex();
+              if (!context.mounted) return;
+              context.read<AppModel>().isLoading = false;
+              context.go('/index');
+            });
 
-          // todo 20240304 Show splash screen while testing existing CFCookies
-          return const Center(child: CircularProgressIndicator());
-        } else {
-          controller
-            ..setJavaScriptMode(JavaScriptMode.unrestricted)
-            ..setBackgroundColor(const Color(0x00000000))
-            ..setNavigationDelegate(
-              NavigationDelegate(
-                onPageFinished: (String url) async {
-                  context.read<AppModel>().isLoading = true;
-                  // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
-                  final (_, token) = await receiveCFCookies(
-                      controller,
-                      Provider.of<ComicListModel>(context, listen: false)
-                          .fetchIndex);
-                  //retest new cookie
-                  if (!await testLastCFCookies()) {
-                    return;
-                  }
-                  if (!context.mounted || token.isEmpty) return;
-                  context.read<AppModel>().isLoading = false;
-                  context.go('/index');
-                },
-              ),
-            )
-            ..loadRequest(Uri.parse('https://nhentai.net'));
-        }
-
-        return SafeArea(
-          child: Scaffold(
-            body: Center(
+            // todo 20240304 Show splash screen while testing existing CFCookies
+            return const Center(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                      'Passing Cloudflare checking, please wait and click "I am human" checkbox if any...'),
-                  Expanded(
-                      child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: WebViewWidget(controller: controller),
-                  )),
+                  CircularProgressIndicator(),
+                  Text('Loading index...'),
                 ],
               ),
+            );
+          } else {
+            controller
+              ..setJavaScriptMode(JavaScriptMode.unrestricted)
+              ..setBackgroundColor(const Color(0x00000000))
+              ..setNavigationDelegate(
+                NavigationDelegate(
+                  onPageFinished: (String url) async {
+                    context.read<AppModel>().isLoading = true;
+                    // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
+                    final (_, token) = await receiveCFCookies(
+                        controller,
+                        Provider.of<ComicListModel>(context, listen: false)
+                            .fetchIndex);
+                    //retest new cookie
+                    if (!await testLastCFCookies()) {
+                      return;
+                    }
+                    if (!context.mounted || token.isEmpty) return;
+                    context.read<AppModel>().isLoading = false;
+                    context.go('/index');
+                  },
+                ),
+              )
+              ..loadRequest(Uri.parse('https://nhentai.net'));
+          }
+
+          return SafeArea(
+            child: Scaffold(
+              body: Center(
+                child: Column(
+                  children: [
+                    const Text(
+                        'Passing Cloudflare checking, please wait and click "I am human" checkbox if any...'),
+                    Expanded(
+                        child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: WebViewWidget(controller: controller),
+                    )),
+                  ],
+                ),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

@@ -9,6 +9,7 @@ import 'package:concept_nhv/theme.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
@@ -19,6 +20,10 @@ import 'package:webview_flutter/webview_flutter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // workaround for 120hz (Android) https://github.com/flutter/flutter/issues/35162
+  if (Platform.isAndroid) {
+    await FlutterDisplayMode.setHighRefreshRate();
+  }
   await Store.init();
   runApp(MultiProvider(
     providers: [

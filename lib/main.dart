@@ -317,16 +317,32 @@ class CollectionSliver extends StatelessWidget {
           }
 
           List<ComicCover> collectionComics = collectedComics.map((e) {
-            var images = NHImages.fromJson(jsonDecode(e['images'] as String));
+            try {
+              var images = NHImages.fromJson(jsonDecode(e['images'] as String));
+              return ComicCover(
+                id: e['comicid'] as String,
+                mediaId: e['mid'] as String,
+                title: e['title'] as String,
+                images: images,
+                pages: e['pages'] as int,
+                thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+                thumbnailWidth: images.thumbnail!.w!,
+                thumbnailHeight: images.thumbnail!.h!,
+              );
+            } on FormatException catch (e) {
+              debugPrint('images is not json (old format images)');
+            }
+
+            var images = e['images'] as String;
             return ComicCover(
               id: e['comicid'] as String,
               mediaId: e['mid'] as String,
               title: e['title'] as String,
-              images: images,
+              images: NHImages(pages: null, cover: null, thumbnail: null),
               pages: e['pages'] as int,
-              thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-              thumbnailWidth: images.thumbnail!.w!,
-              thumbnailHeight: images.thumbnail!.h!,
+              thumbnailExt: App.extMap[images[0]] ?? 'jpg',
+              thumbnailWidth: 9,
+              thumbnailHeight: 16,
             );
           }).toList();
 
@@ -389,15 +405,29 @@ class CollectionListScreen extends StatelessWidget {
                 );
               }
               final mid = firstItem['mid'] as String;
-              var images =
-                  NHImages.fromJson(jsonDecode(firstItem['images'] as String));
+              try {
+                var images = NHImages.fromJson(
+                    jsonDecode(firstItem['images'] as String));
+                return CollectionCover(
+                  mid: mid,
+                  collectionName: firstItem['name'] as String,
+                  collectedCount: e.value.length,
+                  thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+                  thumbnailWidth: images.thumbnail!.w!,
+                  thumbnailHeight: images.thumbnail!.h!,
+                );
+              } on FormatException catch (e) {
+                debugPrint('images is not json (old format images)');
+              }
+
+              var images = firstItem['images'] as String;
               return CollectionCover(
                 mid: mid,
                 collectionName: firstItem['name'] as String,
                 collectedCount: e.value.length,
-                thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-                thumbnailWidth: images.thumbnail!.w!,
-                thumbnailHeight: images.thumbnail!.h!,
+                thumbnailExt: App.extMap[images[0]]!,
+                thumbnailWidth: 9,
+                thumbnailHeight: 16,
               );
             }).toList();
 
@@ -442,7 +472,7 @@ enum NHLanguage {
   }
 
   // todo 20240330 change default to read from settings and persist to settings
-  static NHLanguage current = NHLanguage.all;
+  static NHLanguage current = NHLanguage.chinese;
 }
 
 class NHPopularType {
@@ -616,6 +646,7 @@ class Store {
   static Future<int> collectComic({
     required String collectionName,
     required String id,
+    String? dateCreated,
   }) async {
     final db = await _database;
     return db.insert(
@@ -623,7 +654,7 @@ class Store {
       {
         'name': collectionName,
         'comicid': id,
-        'dateCreated': DateTime.now().toIso8601String(),
+        'dateCreated': dateCreated ?? DateTime.now().toIso8601String(),
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -671,8 +702,14 @@ class Store {
   static Future<List<Map<String, Object?>>> getEveryCollection() async {
     debugPrint("get every collection...");
     final db = await _database;
+    // final List<Map<String, Object?>> collectedComics = await db.rawQuery(
+    //     "select * from Collection col left join Comic com on col.comicid = com.id order by dateCreated desc");
     final List<Map<String, Object?>> collectedComics = await db.rawQuery(
-        "select * from Collection col left join Comic com on col.comicid = com.id order by dateCreated desc");
+        "select * from Collection col, Comic com where col.comicid = com.id order by dateCreated desc");
+
+    debugPrint('testing comics...');
+    final List<Map<String, Object?>> comics =
+        await db.rawQuery("select * from Comic");
 
     return collectedComics;
   }
@@ -718,6 +755,7 @@ class FirstScreen extends StatelessWidget {
       if (token == null) {
         return ("", "");
       }
+      debugPrint("receiveCFCookies1: ---$token===");
       if (token.contains("cf_clearance=")) {
         token = token
             .split("; ")
@@ -1035,6 +1073,84 @@ class SettingsScreen extends StatelessWidget {
               title: const Text('Diagnose'),
               onTap: () {
                 // todo 20240308 Check api status of all language query, and the real search with queries. Show result in real time.
+              },
+            ),
+            const Divider(),
+            const ListTile(title: Text('About')),
+            ListTile(
+              title: const Text('Load json (network)'),
+              onTap: () async {
+                // open dialog to set url
+                var url = await showDialog<String?>(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: const Text('Enter URL'),
+                      content: TextField(
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'URL',
+                        ),
+                        onSubmitted: (value) {
+                          Navigator.of(context).pop(value);
+                        },
+                      ),
+                    );
+                  },
+                );
+
+                if (url == null || url.isEmpty) {
+                  return;
+                }
+
+                final comicResponse =
+                    await Dio().get<String>("$url/comics.json");
+                final collectionResponse =
+                    await Dio().get<String>("$url/collections.json");
+                final comicJson = List<Map<String, dynamic>>.from(
+                    jsonDecode(comicResponse.data!));
+                final collectionJson = List<Map<String, dynamic>>.from(
+                    jsonDecode(collectionResponse.data!));
+                debugPrint(comicJson.toString());
+                debugPrint(collectionJson.toString());
+
+                for (var json in collectionJson) {
+                  /*
+                  e.g.
+                  {
+                    "name" : "History",
+                    "id" : 1001,
+                    "dateCreated" : 1693603899000
+                  }
+                  */
+                  Store.collectComic(
+                    collectionName: json['name'],
+                    id: "${json['id']}",
+                    dateCreated: DateTime.fromMillisecondsSinceEpoch(json['dateCreated']).toIso8601String(),
+                  );
+                }
+
+                for (var json in comicJson) {
+                  /* 
+                  e.g. 
+                  {
+                    "id" : 1,
+                    "mid" : "9",
+                    "title" : "(C71) [Arisan-Antenna (Koari)] Eat The Rich! (Sukatto Golf Pangya)",
+                    "pageTypes" : "jjjjjjjjjjjjjj",
+                    "numOfPages" : 14
+                  }
+                  */
+
+                  final result = await Store.addComic(
+                    id: "${json['id']}",
+                    mid: json['mid'],
+                    title: json['title'],
+                    images: json['pageTypes'],
+                    pages: json['numOfPages'],
+                  );
+                  debugPrint("addcomic result for ${json['id']}: $result");
+                }
               },
             ),
             const Divider(),

@@ -938,24 +938,35 @@ class ThirdScreen extends StatelessWidget {
           controller: context.read<CurrentComicModel>().scrollController,
           slivers: <Widget>[
             SliverAppBar(
-              title: Text(id),
-              // todo 20240322 allow add to collection when viewing comic, required mid+title+pages+comic.images
-              // actions: [
-              //   IconButton(
-              //     icon: const Icon(Icons.favorite_outline),
-              //     onPressed: () {
-              //       Store.addComic(
-              //         id: id,
-              //         mid: mid,
-              //         title: title,
-              //         pages: pages,
-              //         images: jsonEncode(comic.images.toJson()),
-              //       );
-              //       Store.collectComic(collectionName: 'Favorite', id: id);
-              //     },
-              //   ),
-              // ],
-            ),
+                // title: Text(id),
+                // todo 20240322 allow add to collection when viewing comic, required mid+title+pages+comic.images
+                // actions: [
+                //   IconButton(
+                //     icon: const Icon(Icons.favorite_outline),
+                //     onPressed: () {
+                //       Store.addComic(
+                //         id: id,
+                //         mid: mid,
+                //         title: title,
+                //         pages: pages,
+                //         images: jsonEncode(comic.images.toJson()),
+                //       );
+                //       Store.collectComic(collectionName: 'Favorite', id: id);
+                //     },
+                //   ),
+                // ],
+                forceMaterialTransparency: true,
+                pinned: true,
+                flexibleSpace: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[Colors.black38, Colors.transparent],
+                      stops: [0.0, 1],
+                    ),
+                  ),
+                )),
             Consumer<CurrentComicModel>(
               builder: (context, currentComicModel, child) {
                 if (currentComicModel.currentComic == null) {

@@ -986,7 +986,7 @@ class ThirdScreen extends StatelessWidget {
                     (BuildContext context, int index) {
                       final page = index + 1;
                       final mid = c.mediaId;
-                      final ext = App.extMap[c.images!.pages![index].t];
+                      final ext = App.extMap[c.images!.pages![index].t] ?? 'jpg';
                       final width = c.images!.pages![index].w!;
                       final height = c.images!.pages![index].h!;
                       final url =
@@ -1216,7 +1216,17 @@ class SimpleCachedNetworkImage extends StatelessWidget {
 
 class App extends StatefulWidget {
   // 20240215 seriously, why upload gif as thumbnail...
-  static final extMap = {'j': 'jpg', 'p': 'png', 'g': 'gif'};
+  static final extMap = {
+    'j': 'jpg',
+    'p': 'png',
+    'g': 'gif',
+    'w': 'webp',
+    // 20241117 in case we have more format in the future
+    't': 'tiff',
+    'b': 'bmp',
+    'h': 'heif',
+    'a': 'avif',
+  };
   const App({super.key});
 
   @override
@@ -1417,7 +1427,9 @@ class _AppState extends State<App> {
                           title: e.title!.english!,
                           images: e.images!,
                           pages: e.numPages!,
-                          thumbnailExt: App.extMap[e.images!.thumbnail!.t!]!,
+                          // 20241117 we have "t":"w" now, guessing it's webp. Also setting fallback value to jpg to avoid crashing the whole page
+                          thumbnailExt:
+                              App.extMap[e.images!.thumbnail!.t!] ?? "jpg",
                           thumbnailWidth: e.images!.thumbnail!.w!,
                           thumbnailHeight: e.images!.thumbnail!.h!,
                         ))

@@ -10,7 +10,11 @@ Document of the site's API that nhviewer might use.
   - https://nhentai.net/api/galleries/search?query=japanese
   - https://nhentai.net/api/galleries/search?query=-
 - Thumbnails
-  - https://t.nhentai.net/galleries/$mid/thumb.$ext
+  - https://t1.nhentai.net/galleries/$mid/thumb.$ext nhv is currently hardcoded this one as workaround
+  - https://t2.nhentai.net/galleries/$mid/thumb.$ext
+  - https://t3.nhentai.net/galleries/$mid/thumb.$ext
+  - https://t4.nhentai.net/galleries/$mid/thumb.$ext
+  - obsoleted? https://t.nhentai.net/galleries/$mid/thumb.$ext
 - ...
 
 ## API issues with language keywords

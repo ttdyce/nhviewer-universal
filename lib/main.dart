@@ -1203,10 +1203,28 @@ class SimpleCachedNetworkImage extends StatelessWidget {
       ),
       errorWidget: (context, url, error) => AspectRatio(
         aspectRatio: width / height,
-        child: const Center(
-          child: Icon(
-            Icons.error,
-            color: Colors.red,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error,
+                color: Colors.red,
+              ),
+              GestureDetector(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Link copied to clipboard')),
+                  );
+                },
+                child: Text(
+                  "$url",
+                  style: const TextStyle(
+                      color: Colors.blue, decoration: TextDecoration.underline),
+                ),
+              ),
+            ],
           ),
         ),
       ),

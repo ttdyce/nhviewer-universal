@@ -990,7 +990,7 @@ class ThirdScreen extends StatelessWidget {
                       final width = c.images!.pages![index].w!;
                       final height = c.images!.pages![index].h!;
                       final url =
-                          "https://i.nhentai.net/galleries/$mid/$page.$ext";
+                          "https://i1.nhentai.net/galleries/$mid/$page.$ext";
                       debugPrint(url);
                       // Stack of comic image, page number
                       return Stack(

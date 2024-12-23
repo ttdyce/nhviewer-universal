@@ -990,7 +990,7 @@ class ThirdScreen extends StatelessWidget {
                       final width = c.images!.pages![index].w!;
                       final height = c.images!.pages![index].h!;
                       final url =
-                          "https://i1.nhentai.net/galleries/$mid/$page.$ext";
+                          "https://i3.nhentai.net/galleries/$mid/$page.$ext";
                       debugPrint(url);
                       // Stack of comic image, page number
                       return Stack(
@@ -1638,8 +1638,9 @@ class ComicSliverGrid extends StatelessWidget {
           // final thumbnailHeight = comic.images.thumbnail!.h!;
           final thumbnailWidth = comic.thumbnailWidth;
           final thumbnailHeight = comic.thumbnailHeight;
-          var thumbnailLink = "https://t1.nhentai.net/galleries/$mid/thumb.$ext";
-          debugPrint("https://t1.nhentai.net/galleries/$mid/thumb.$ext");
+          var thumbnailLink =
+              "https://t3.nhentai.net/galleries/$mid/thumb.$ext";
+          debugPrint("https://t3.nhentai.net/galleries/$mid/thumb.$ext");
 
           return ComicListItem(
             id: id,
@@ -1961,7 +1962,7 @@ class CollectionCover {
 
   String get thumbnailLink {
     if (mid != "-1") {
-      return "https://t1.nhentai.net/galleries/$mid/thumb.$thumbnailExt";
+      return "https://t3.nhentai.net/galleries/$mid/thumb.$thumbnailExt";
     }
 
     return "https://placehold.co/${thumbnailWidth}x$thumbnailHeight/png?text=$collectionName";

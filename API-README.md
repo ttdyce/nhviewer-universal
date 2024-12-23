@@ -10,15 +10,15 @@ Document of the site's API that nhviewer might use.
   - https://nhentai.net/api/galleries/search?query=japanese
   - https://nhentai.net/api/galleries/search?query=-
 - Thumbnails
-  - https://t1.nhentai.net/galleries/$mid/thumb.$ext nhv is currently hardcoded this one as workaround
+  - https://t1.nhentai.net/galleries/$mid/thumb.$ext
   - https://t2.nhentai.net/galleries/$mid/thumb.$ext
-  - https://t3.nhentai.net/galleries/$mid/thumb.$ext
+  - https://t3.nhentai.net/galleries/$mid/thumb.$ext nhv is currently hardcoded this one as workaround
   - https://t4.nhentai.net/galleries/$mid/thumb.$ext
   - obsoleted? https://t.nhentai.net/galleries/$mid/thumb.$ext
 - Inner page
-  - https://i1.nhentai.net/galleries/$mid/thumb.$ext nhv is currently hardcoded this one as workaround
+  - https://i1.nhentai.net/galleries/$mid/thumb.$ext
   - https://i2.nhentai.net/galleries/$mid/thumb.$ext
-  - https://i3.nhentai.net/galleries/$mid/thumb.$ext
+  - https://i3.nhentai.net/galleries/$mid/thumb.$ext nhv is currently hardcoded this one as workaround
   - https://i4.nhentai.net/galleries/$mid/thumb.$ext
   - obsoleted? https://i.nhentai.net/galleries/$mid/$page.$ext
 - ...

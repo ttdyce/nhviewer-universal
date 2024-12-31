@@ -30,6 +30,16 @@ jobs:
       with:
         name: release-apk
         path: build/app/outputs/flutter-apk/app-release.apk
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      # if: startsWith(github.ref, 'refs/tags/')
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref_name }}
+        draft: true
+        prerelease: true
+        files: build/app/outputs/flutter-apk/app-release.apk
     
     # 20241222 not working 
     # - name: Create Release

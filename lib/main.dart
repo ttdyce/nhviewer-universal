@@ -220,20 +220,20 @@ Future<void> main() async {
                       );
                 }
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text("Loaded last seen page"),
-                    action: SnackBarAction(
-                      label: "Back to top",
-                      onPressed: () => context
-                          .read<CurrentComicModel>()
-                          .scrollController
-                          ?.jumpTo(0),
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text("Loaded last seen page"),
+                      action: SnackBarAction(
+                        label: "Back to top",
+                        onPressed: () => context
+                            .read<CurrentComicModel>()
+                            .scrollController
+                            ?.jumpTo(0),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
                     ),
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
+                  );
               });
 
               return ThirdScreen();

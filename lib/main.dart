@@ -1179,6 +1179,9 @@ class SettingsScreen extends StatelessWidget {
 }
 
 class SimpleCachedNetworkImage extends StatelessWidget {
+  // debt 20250213 hardcode DEMO_MODE to true for now
+  final bool DEMO_MODE = true; 
+
   const SimpleCachedNetworkImage({
     super.key,
     required this.url,
@@ -1192,42 +1195,57 @@ class SimpleCachedNetworkImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CachedNetworkImage(
-      imageUrl: url,
-      httpHeaders: Provider.of<CurrentComicModel>(context).headers,
-      placeholder: (context, url) => AspectRatio(
-        aspectRatio: width / height,
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
-      ),
-      errorWidget: (context, url, error) => AspectRatio(
-        aspectRatio: width / height,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.error,
-                color: Colors.red,
+    return Stack(
+      children: [
+        CachedNetworkImage(
+          imageUrl: url,
+          httpHeaders: Provider.of<CurrentComicModel>(context).headers,
+          placeholder: (context, url) => AspectRatio(
+            aspectRatio: width / height,
+            child: const Center(
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          errorWidget: (context, url, error) => AspectRatio(
+            aspectRatio: width / height,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error,
+                    color: Colors.red,
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: url));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Link copied to clipboard')),
+                      );
+                    },
+                    child: Text(
+                      "$url",
+                      style: const TextStyle(
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline),
+                    ),
+                  ),
+                ],
               ),
-              GestureDetector(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: url));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Link copied to clipboard')),
-                  );
-                },
-                child: Text(
-                  "$url",
-                  style: const TextStyle(
-                      color: Colors.blue, decoration: TextDecoration.underline),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
-      ),
+        if (DEMO_MODE)
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+              child: Container(
+                color: Colors.black.withOpacity(0),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

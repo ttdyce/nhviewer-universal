@@ -18,6 +18,8 @@
 *** for contributors-url, forks-url, etc. This is an optional, concise syntax you may use.
 *** https://www.markdownguide.org/basic-syntax/#reference-style-links
 -->
+[![Flutter CI](https://github.com/ttdyce/nhviewer-universal/actions/workflows/flutter-workflow.yml/badge.svg)](https://github.com/ttdyce/nhviewer-universal/actions/workflows/flutter-workflow.yml)
+<br />
 [![Contributors][contributors-shield]][contributors-url]
 [![MIT License][license-shield]][license-url]
 <!-- [![Forks][forks-shield]][forks-url]
@@ -38,7 +40,7 @@
 
   <p align="center">
     A complete rewrite of NHViewer. <br />
-    Featuring Material Design 3, better performance, and smaller codebase. 
+    Featuring Material Design 3, iOS Support, and smaller codebase. 
     <br />
     <br />
     <img src='https://storage.googleapis.com/cms-storage-bucket/916809aa4c8f73ad70d2.svg' width=160>
@@ -61,6 +63,14 @@
 <!-- Here's a blank template to get started: To avoid retyping too much info. Do a search and replace with your text editor for the following: `ttdyce`, `nhviewer-universal`, `twitter_handle`, `linkedin_username`, `email_client`, `email`, `nhviewer-universal`, `A complete rewrite of NHViewer, with flutter. Featuring Material Design 3, better performance, and smaller codebase. `
 
 <p align="right"> <a href="#readme-top"> ‣ back to top</a> </p> -->
+
+<p>
+<img src="./readme-asset/index-and-search.png" alt="Search result display demo" width="270">
+<img src="./readme-asset/favorites.png" alt="Favorite page demo" width="270">
+<img src="./readme-asset/collections.png" alt="Collection display demo" width="270">
+</p>
+
+<hr>
 
 ## Features
 

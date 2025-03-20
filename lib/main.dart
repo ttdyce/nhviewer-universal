@@ -1180,7 +1180,7 @@ class SettingsScreen extends StatelessWidget {
 
 class SimpleCachedNetworkImage extends StatelessWidget {
   // debt 20250213 hardcode DEMO_MODE to true for now
-  final bool DEMO_MODE = true; 
+  final bool DEMO_MODE = false; 
 
   const SimpleCachedNetworkImage({
     super.key,

@@ -18,7 +18,7 @@ Document of the site's API that nhviewer might use.
 - Inner page
   - https://i1.nhentai.net/galleries/$mid/thumb.$ext
   - https://i2.nhentai.net/galleries/$mid/thumb.$ext
-  - https://i3.nhentai.net/galleries/$mid/thumb.$ext nhv is currently hardcoded this one as workaround
+  - https://i3.nhentai.net/galleries/$mid/thumb.$ext nhv is currently hardcoded this one as workaround. (20250328 some server is really slow these days, an idea for this issue is to pick the fastest one by requesting i[1-4] page 1 of each comic. Also, show the blurred image from t[1-4] first woulld be helpful too)
   - https://i4.nhentai.net/galleries/$mid/thumb.$ext
   - obsoleted? https://i.nhentai.net/galleries/$mid/$page.$ext
 - ...

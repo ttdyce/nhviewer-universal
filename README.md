@@ -87,7 +87,7 @@
 
 ### Prerequisites
 
-- Flutter 3.19.2, usually the latest one on app releasing
+- Flutter 3.29.2, usually the latest one on app releasing
 - [Editor](https://docs.flutter.dev/get-started/editor), suggested VSCode
 
 ### Installation

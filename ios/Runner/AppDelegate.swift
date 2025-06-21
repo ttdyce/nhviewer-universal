@@ -3,7 +3,7 @@ import Flutter
 import WebKit
 import webview_flutter_wkwebview;
 
-@UIApplicationMain
+@main
 @objc class AppDelegate: FlutterAppDelegate {
     override func application(
         _ application: UIApplication,
@@ -68,7 +68,7 @@ import webview_flutter_wkwebview;
         
         let delegate = application.delegate
         httpCookieStore =
-        FWFWebViewFlutterWKWebViewExternalAPI.webView(forIdentifier: arguments as Int, with: delegate as! FlutterPluginRegistry)?.configuration.websiteDataStore.httpCookieStore
+        FWFWebViewFlutterWKWebViewExternalAPI.webView(forIdentifier: Int64(arguments as Int), withPluginRegistry: delegate as! FlutterPluginRegistry)?.configuration.websiteDataStore.httpCookieStore
         
         if (httpCookieStore == nil){
             return

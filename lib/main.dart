@@ -780,32 +780,47 @@ class FirstScreen extends StatelessWidget {
 
   Future<bool> testLastCFCookies() async {
     debugPrint("testLastCFCookies...");
-    final (agent, token) = await Store.getCFCookies();
-    if (agent.isEmpty || token.isEmpty) {
-      debugPrint("Note: Found empty user agent or token, still testing...");
-      // return false;
-    } else {
-      debugPrint("Found previous user agent and token! testing...");
-    }
-
+    
     final dio = Dio();
     const url = "https://nhentai.net";
+    
+    // Try request without headers first
     try {
-      await dio.get(url,
-          options: Options(headers: {
-            HttpHeaders.userAgentHeader: agent,
-            HttpHeaders.cookieHeader: "cf_clearance=$token",
-          }));
+      debugPrint("Testing without headers...");
+      await dio.get(url);
+      debugPrint("testLastCFCookies ok without headers!");
+      return true;
     } on DioException catch (e) {
       debugPrint(
-          "testing failed. DioException: status code=${e.response?.statusCode}");
-      await Store.deleteCFCookies();
-      return false;
+          "testing failed without headers. DioException: status code=${e.response?.statusCode}");
+      debugPrint("Trying with headers...");
+      
+      // Get cookies only when needed
+      final (agent, token) = await Store.getCFCookies();
+      if (agent.isEmpty || token.isEmpty) {
+        debugPrint("Note: Found empty user agent or token, still testing...");
+        // return false;
+      } else {
+        debugPrint("Found previous user agent and token! testing...");
+      }
+      
+      // Try with headers if the first attempt fails
+      try {
+        await dio.get(url,
+            options: Options(headers: {
+              HttpHeaders.userAgentHeader: agent,
+              HttpHeaders.cookieHeader: "cf_clearance=$token",
+            }));
+        debugPrint("testLastCFCookies ok with headers!");
+        debugPrint("testLastCFCookies $token");
+        return true;
+      } on DioException catch (e2) {
+        debugPrint(
+            "testing failed with headers. DioException: status code=${e2.response?.statusCode}");
+        await Store.deleteCFCookies();
+        return false;
+      }
     }
-
-    debugPrint("testLastCFCookies ok!");
-    debugPrint("testLastCFCookies $token");
-    return true;
   }
 
   @override

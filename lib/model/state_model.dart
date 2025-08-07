@@ -110,7 +110,6 @@ class ComicListModel extends ChangeNotifier {
       languageQuery = NHLanguage.current.alternatives[retryCount - 1];
     }
 
-    final (agent, token) = await Store.getCFCookies();
     var url =
         "https://nhentai.net/api/galleries/search?query=$q%20$languageQuery&page=$page";
     if (sortByPopularType != null) {
@@ -126,12 +125,11 @@ class ComicListModel extends ChangeNotifier {
     } else {
       debugPrint('Loading search: $url');
     }
+    
+    // Try request without options first
     try {
-      final response = await dio.get(url,
-          options: Options(headers: {
-            HttpHeaders.userAgentHeader: agent,
-            HttpHeaders.cookieHeader: "cf_clearance=$token",
-          }));
+      debugPrint('Trying request without headers...');
+      final response = await dio.get(url);
       print(response);
       final freshComics = NHList.fromJson(response.data);
       _noMorePage = freshComics.result?.isEmpty ?? true;
@@ -151,16 +149,47 @@ class ComicListModel extends ChangeNotifier {
           );
     } on DioException catch (e) {
       debugPrint(
-          "fetchSearch DioException, status code = ${e.response?.statusCode}");
-      debugPrint('fetchSearch failed ($url), retrying...');
-      return fetchSearch(
-        q: q,
-        page: page,
-        sortByPopularType: sortByPopularType,
-        retryCount: retryCount + 1,
-        lastStatusCode: e.response?.statusCode,
-        clearComic: true,
-      );
+          "fetchSearch failed without headers, status code = ${e.response?.statusCode}");
+      debugPrint('Trying with headers...');
+      
+      // Get cookies only when needed
+      final (agent, token) = await Store.getCFCookies();
+      
+      // Try with headers if the first attempt fails
+      try {
+        final response = await dio.get(url,
+            options: Options(headers: {
+              HttpHeaders.userAgentHeader: agent,
+              HttpHeaders.cookieHeader: "cf_clearance=$token",
+            }));
+        print(response);
+        final freshComics = NHList.fromJson(response.data);
+        _noMorePage = freshComics.result?.isEmpty ?? true;
+        lastStatusCode = response.statusCode;
+        if (!_noMorePage) {
+          _fetchedComics.add(freshComics);
+        }
+        notifyListeners();
+        _fetchPage = (p, clearComic) => fetchSearch(
+              q: q,
+              page: p,
+              sortByPopularType: sortByPopularType,
+              retryCount: retryCount,
+              clearComic: clearComic,
+            );
+      } on DioException catch (e2) {
+        debugPrint(
+            "fetchSearch DioException with headers, status code = ${e2.response?.statusCode}");
+        debugPrint('fetchSearch failed ($url), retrying...');
+        return fetchSearch(
+          q: q,
+          page: page,
+          sortByPopularType: sortByPopularType,
+          retryCount: retryCount + 1,
+          lastStatusCode: e2.response?.statusCode,
+          clearComic: true,
+        );
+      }
     }
 
     pageLoaded = page;
@@ -202,27 +231,39 @@ class CurrentComicModel extends ChangeNotifier {
   Map<String, String>? headers;
 
   Future<void> fetchComic(String id) async {
-    final (agent, token) = await Store.getCFCookies();
-
-    headers = {
-      HttpHeaders.userAgentHeader: agent,
-      HttpHeaders.cookieHeader: "cf_clearance=$token",
-    };
     final dio = Dio();
-    dio
-        .get('https://nhentai.net/api/gallery/$id',
-            options: Options(headers: headers))
-        .then((response) {
+    
+    // Try request without headers first
+    try {
+      debugPrint('Trying fetchComic without headers...');
+      final response = await dio.get('https://nhentai.net/api/gallery/$id');
       print(response);
       currentComic = NHComic.fromJson(response.data);
-      // _fetchedComics.add(NHList.fromJson(Sample.samplejson));
-      // pageLoaded += _fetchedComics.last.perPage ?? 0;
+      headers = null; // No headers needed
       notifyListeners();
-    }).catchError((e) {
-      print(e);
-    });
-
-    // final nhlist = NHList.fromJson(Sample.samplejson);
+    } catch (e) {
+      debugPrint('fetchComic failed without headers, trying with headers...');
+      
+      // Get cookies only when needed
+      final (agent, token) = await Store.getCFCookies();
+      
+      headers = {
+        HttpHeaders.userAgentHeader: agent,
+        HttpHeaders.cookieHeader: "cf_clearance=$token",
+      };
+      
+      // Try with headers if the first attempt fails
+      try {
+        final response = await dio.get('https://nhentai.net/api/gallery/$id',
+            options: Options(headers: headers));
+        print(response);
+        currentComic = NHComic.fromJson(response.data);
+        notifyListeners();
+      } catch (e2) {
+        print('fetchComic failed with headers: $e2');
+        rethrow;
+      }
+    }
   }
 
   void clearComic() {

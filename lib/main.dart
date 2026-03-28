@@ -209,37 +209,7 @@ Future<void> main() async {
           GoRoute(
             name: 'third',
             path: '/third',
-            builder: (context, state) {
-              final id = state.uri.queryParameters['id'] ?? '';
-              Store.getOption("lastSeenOffset-$id").then((lastSeenOffset) {
-                debugPrint(
-                    "getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
-                if (lastSeenOffset.isNotEmpty) {
-                  context.read<CurrentComicModel>().scrollController.animateTo(
-                        double.parse(lastSeenOffset),
-                        duration: const Duration(milliseconds: 1000),
-                        curve: Curves.easeInOut,
-                      );
-                }
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text("Loaded last seen page"),
-                      action: SnackBarAction(
-                        label: "Back to top",
-                        onPressed: () => context
-                            .read<CurrentComicModel>()
-                            .scrollController
-                            ?.jumpTo(0),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 3),
-                    ),
-                  );
-              });
-
-              return ThirdScreen();
-            },
+            builder: (context, state) => ThirdScreen(),
           ),
           GoRoute(
             name: 'settings',
@@ -999,6 +969,47 @@ class _ThirdScreenState extends State<ThirdScreen> {
   bool _navigating = false;
   double _horizontalDragDelta = 0.0;
   static const double _swipeThreshold = 100.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = this.context;
+      final id = GoRouterState.of(ctx).uri.queryParameters['id'] ?? '';
+      Store.getOption("lastSeenOffset-$id").then((lastSeenOffset) {
+        if (!mounted) return;
+        debugPrint(
+            "getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
+        if (lastSeenOffset.isNotEmpty) {
+          ctx.read<CurrentComicModel>().scrollController.animateTo(
+                double.parse(lastSeenOffset),
+                duration: const Duration(milliseconds: 1000),
+                curve: Curves.easeInOut,
+              );
+
+          try {
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              SnackBar(
+                content: const Text("Loaded last seen page"),
+                action: SnackBarAction(
+                  label: "Back to top",
+                  onPressed: () => ctx
+                      .read<CurrentComicModel>()
+                      .scrollController
+                      ?.jumpTo(0),
+                ),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(seconds: 3),
+                persist: false,
+              ),
+            );
+          } catch (e) {
+            debugPrint("SnackBar presentation failed: $e");
+          }
+        }
+      });
+    });
+  }
 
   void _navigateToComic(BuildContext context, String targetId) {
     if (_navigating) return;

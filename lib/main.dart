@@ -31,6 +31,7 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (context) => AppModel()),
       ChangeNotifierProvider(create: (context) => ComicListModel()),
       ChangeNotifierProvider(create: (context) => CurrentComicModel()),
+      ChangeNotifierProvider(create: (context) => ComicSessionQueueModel()),
     ],
     child: MaterialApp.router(
       theme: const NHVMaterialTheme(TextTheme()).dark(),
@@ -296,9 +297,29 @@ class CollectionSliver extends StatelessWidget {
           }
 
           List<Map<String, Object?>> everyCollectedComics = snapshot.data;
-          List<Map<String, Object?>> collectedComics = everyCollectedComics
-              .where((element) => element['name'] == collectionName)
-              .toList();
+
+          // Comic session queue uses in-memory IDs to filter comics
+          List<Map<String, Object?>> collectedComics;
+          if (collectionName == 'Queue') {
+            final comicSessionQueue = context.watch<ComicSessionQueueModel>();
+            final queueIds = comicSessionQueue.queue.toSet();
+            collectedComics = everyCollectedComics
+                .where((element) => queueIds.contains(element['comicid']))
+                .toList();
+            // Deduplicate by comicid (a comic can appear in multiple collections)
+            final seen = <String>{};
+            collectedComics.retainWhere((e) => seen.add(e['comicid'] as String));
+            // Sort by queue order
+            collectedComics.sort((a, b) {
+              final aIdx = comicSessionQueue.indexOf(a['comicid'] as String);
+              final bIdx = comicSessionQueue.indexOf(b['comicid'] as String);
+              return aIdx.compareTo(bIdx);
+            });
+          } else {
+            collectedComics = everyCollectedComics
+                .where((element) => element['name'] == collectionName)
+                .toList();
+          }
 
           if (collectedComics.isEmpty) {
             return SliverFillRemaining(
@@ -431,6 +452,50 @@ class CollectionListScreen extends StatelessWidget {
                 thumbnailHeight: 16,
               );
             }).toList();
+
+            // Add comic session queue as a collection if non-empty
+            final comicSessionQueue = context.watch<ComicSessionQueueModel>();
+            if (comicSessionQueue.isNotEmpty) {
+              // Find the first queued comic in the collected data for thumbnail
+              final firstQueuedId = comicSessionQueue.queue.first;
+              final queuedComic = collectedComics
+                  .where((e) => e['comicid'] == firstQueuedId)
+                  .firstOrNull;
+              if (queuedComic != null) {
+                final mid = queuedComic['mid'] as String;
+                try {
+                  var images = NHImages.fromJson(
+                      jsonDecode(queuedComic['images'] as String));
+                  collections.add(CollectionCover(
+                    mid: mid,
+                    collectionName: 'Queue',
+                    collectedCount: comicSessionQueue.length,
+                    thumbnailExt: App.extMap[images.thumbnail!.t!]!,
+                    thumbnailWidth: images.thumbnail!.w!,
+                    thumbnailHeight: images.thumbnail!.h!,
+                  ));
+                } on FormatException catch (_) {
+                  var images = queuedComic['images'] as String;
+                  collections.add(CollectionCover(
+                    mid: mid,
+                    collectionName: 'Queue',
+                    collectedCount: comicSessionQueue.length,
+                    thumbnailExt: App.extMap[images[0]] ?? 'jpg',
+                    thumbnailWidth: 9,
+                    thumbnailHeight: 16,
+                  ));
+                }
+              } else {
+                collections.add(CollectionCover(
+                  mid: '-1',
+                  collectionName: 'Queue',
+                  collectedCount: comicSessionQueue.length,
+                  thumbnailExt: '',
+                  thumbnailWidth: 720,
+                  thumbnailHeight: 720,
+                ));
+              }
+            }
 
             return CollectionSliverGrid(
               collections: collections,
@@ -923,16 +988,78 @@ class IndexScreen extends StatelessWidget {
   }
 }
 
-class ThirdScreen extends StatelessWidget {
-  ThirdScreen({super.key});
+class ThirdScreen extends StatefulWidget {
+  const ThirdScreen({super.key});
+
+  @override
+  State<ThirdScreen> createState() => _ThirdScreenState();
+}
+
+class _ThirdScreenState extends State<ThirdScreen> {
+  bool _navigating = false;
+  double _horizontalDragDelta = 0.0;
+  static const double _swipeThreshold = 100.0;
+
+  void _navigateToComic(BuildContext context, String targetId) {
+    if (_navigating) return;
+    _navigating = true;
+    HapticFeedback.mediumImpact();
+
+    Provider.of<CurrentComicModel>(context, listen: false).clearComic();
+    Provider.of<CurrentComicModel>(context, listen: false).fetchComic(targetId);
+    Provider.of<CurrentComicModel>(context, listen: false)
+        .scrollController
+        .jumpTo(0);
+
+    // Replace current route with the new comic
+    context.pushReplacement(
+      Uri(path: '/third', queryParameters: {'id': targetId}).toString(),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     Map<String, String> query = GoRouterState.of(context).uri.queryParameters;
     final id = query['id']!;
+    final comicSessionQueue = context.read<ComicSessionQueueModel>();
+    final nextId = comicSessionQueue.nextId(id);
+    final prevId = comicSessionQueue.previousId(id);
+    final inQueue = comicSessionQueue.contains(id);
 
     return Scaffold(
-      body: NotificationListener(
+      body: GestureDetector(
+        onHorizontalDragUpdate: inQueue
+            ? (details) {
+                setState(() {
+                  _horizontalDragDelta += details.delta.dx;
+                });
+              }
+            : null,
+        onHorizontalDragEnd: inQueue
+            ? (details) {
+                // Swipe left → next comic
+                if (_horizontalDragDelta < -_swipeThreshold && nextId != null) {
+                  _navigateToComic(context, nextId);
+                }
+                // Swipe right → previous comic
+                if (_horizontalDragDelta > _swipeThreshold && prevId != null) {
+                  _navigateToComic(context, prevId);
+                }
+                setState(() {
+                  _horizontalDragDelta = 0.0;
+                });
+              }
+            : null,
+        onHorizontalDragCancel: inQueue
+            ? () {
+                setState(() {
+                  _horizontalDragDelta = 0.0;
+                });
+              }
+            : null,
+        child: Stack(
+          children: [
+            NotificationListener(
         onNotification: (notification) {
           if (notification is ScrollEndNotification) {
             if (context.read<CurrentComicModel>().scrollController.offset !=
@@ -948,6 +1075,7 @@ class ThirdScreen extends StatelessWidget {
                   "setOption lastSeenOffset-$id ${context.read<CurrentComicModel>().scrollController.offset.toString()}");
             }
           }
+
           return false; // Return true if the notification should be canceled.
         },
         child: CustomScrollView(
@@ -1023,7 +1151,85 @@ class ThirdScreen extends StatelessWidget {
                 );
               },
             ),
-          ],
+            // Queue navigation hint
+            if (inQueue && (nextId != null || prevId != null))
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24.0),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Text(
+                          'Queue: ${comicSessionQueue.indexOf(id) + 1}/${comicSessionQueue.length}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        if (nextId != null || prevId != null)
+                          Text(
+                            'Swipe horizontally to switch comics',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],  // slivers
+        ),  // CustomScrollView
+      ),  // NotificationListener
+            // Swipe arrow indicator overlay
+            if (_horizontalDragDelta.abs() > 10) _buildSwipeIndicator(context, nextId, prevId),
+          ],  // Stack children
+        ),  // Stack
+      ),  // GestureDetector
+    );
+  }
+
+  Widget _buildSwipeIndicator(BuildContext context, String? nextId, String? prevId) {
+    final swipingLeft = _horizontalDragDelta < 0;
+    final swipingRight = _horizontalDragDelta > 0;
+    final hasTarget = (swipingLeft && nextId != null) || (swipingRight && prevId != null);
+
+    if (!hasTarget) return const SizedBox.shrink();
+
+    final progress = (_horizontalDragDelta.abs() / _swipeThreshold).clamp(0.0, 1.0);
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Arrow appears on the edge the user is swiping from
+    // Swipe left (next): arrow on right edge
+    // Swipe right (prev): arrow on left edge
+    final isLeftEdge = swipingRight;
+
+    return Positioned(
+      left: isLeftEdge ? 0 : null,
+      right: isLeftEdge ? null : 0,
+      top: screenHeight / 2 - 28,
+      child: AnimatedOpacity(
+        opacity: progress,
+        duration: const Duration(milliseconds: 50),
+        child: Transform.translate(
+          offset: Offset(
+            isLeftEdge
+                ? (_horizontalDragDelta.abs() * 0.3).clamp(0.0, 48.0)
+                : -(_horizontalDragDelta.abs() * 0.3).clamp(0.0, 48.0),
+            0,
+          ),
+          child: Transform.scale(
+            scale: 0.6 + (progress * 0.4),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: progress >= 1.0
+                    ? Theme.of(context).colorScheme.primary.withAlpha(200)
+                    : Colors.white.withAlpha((progress * 150).toInt() + 40),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Icon(
+                isLeftEdge ? Icons.arrow_back : Icons.arrow_forward,
+                color: progress >= 1.0 ? Colors.white : Colors.white.withAlpha((progress * 255).toInt()),
+                size: 32,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1744,6 +1950,17 @@ class ComicListItem extends StatelessWidget {
                             .clearComic());
               },
               onLongPress: () {
+                // Queue collection: remove from session queue
+                if (collectionName == 'Queue') {
+                  context.read<ComicSessionQueueModel>().remove(id);
+                  HapticFeedback.mediumImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Removed "$title" from queue'),
+                    ),
+                  );
+                  return;
+                }
                 // todo store collection name in upper state
                 // pop up an dialog, if confirm, delete comic
                 if (collectionName.isNotEmpty &&
@@ -1839,11 +2056,12 @@ class ComicListItem extends StatelessWidget {
                   images: jsonEncode(comic.images.toJson()),
                 );
                 Store.collectComic(collectionName: 'Next', id: id);
+                context.read<ComicSessionQueueModel>().add(id);
 
                 HapticFeedback.lightImpact();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Added comic to Next'),
+                    content: Text('Added to Next & Queue'),
                   ),
                 );
               },
@@ -1951,7 +2169,7 @@ class CollectionSliverGrid extends StatelessWidget {
             ],
           );
         },
-        childCount: 3,
+        childCount: collections.length,
       ),
     );
   }

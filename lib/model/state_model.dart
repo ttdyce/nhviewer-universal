@@ -271,3 +271,53 @@ class CurrentComicModel extends ChangeNotifier {
     // notifyListeners();
   }
 }
+
+class ComicSessionQueueModel extends ChangeNotifier {
+  final List<String> _queue = [];
+
+  List<String> get queue => List.unmodifiable(_queue);
+  int get length => _queue.length;
+  bool get isEmpty => _queue.isEmpty;
+  bool get isNotEmpty => _queue.isNotEmpty;
+
+  bool contains(String id) => _queue.contains(id);
+
+  void toggle(String id) {
+    if (_queue.contains(id)) {
+      _queue.remove(id);
+    } else {
+      _queue.add(id);
+    }
+    notifyListeners();
+  }
+
+  void add(String id) {
+    if (!_queue.contains(id)) {
+      _queue.add(id);
+      notifyListeners();
+    }
+  }
+
+  void remove(String id) {
+    if (_queue.remove(id)) {
+      notifyListeners();
+    }
+  }
+
+  /// Returns the index of [id] in the queue, or -1 if not found.
+  int indexOf(String id) => _queue.indexOf(id);
+
+  /// Returns the next comic ID in the queue after [currentId], or null.
+  String? nextId(String currentId) {
+    final idx = _queue.indexOf(currentId);
+    if (idx == -1 || idx + 1 >= _queue.length) return null;
+    return _queue[idx + 1];
+  }
+
+  /// Returns the previous comic ID in the queue before [currentId], or null.
+  String? previousId(String currentId) {
+    final idx = _queue.indexOf(currentId);
+    if (idx <= 0) return null;
+    return _queue[idx - 1];
+  }
+}

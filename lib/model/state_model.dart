@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:concept_nhv/main.dart';
 import 'package:concept_nhv/model/data_model.dart';
@@ -35,7 +34,6 @@ class ComicListModel extends ChangeNotifier {
   final List<NHList> _fetchedComics = [];
   Future<List<Map<String, Object?>>>? everyCollectionFuture;
 
-  // todo 20240211 is exposing $page problematic?
   int pageLoaded = 1;
   bool _noMorePage = false;
   bool get noMorePage => _noMorePage;
@@ -72,13 +70,11 @@ class ComicListModel extends ChangeNotifier {
 
   Future<int?> fetchIndex({
     int page = 1,
-    // String? sortByPopularType,
     bool clearComic = false,
   }) =>
       fetchSearch(
         q: '',
         page: page,
-        // sortByPopularType: sortByPopularType,
         clearComic: clearComic,
       );
 
@@ -111,7 +107,7 @@ class ComicListModel extends ChangeNotifier {
     }
 
     var url =
-        "https://nhentai.net/api/galleries/search?query=$q%20$languageQuery&page=$page";
+        "https://nhentai.net/api/v2/search?query=${Uri.encodeComponent('$q $languageQuery'.trim())}&page=$page";
     if (sortByPopularType != null) {
       _sortByPopularType = sortByPopularType;
       url += "&sort=$sortByPopularType";
@@ -120,16 +116,16 @@ class ComicListModel extends ChangeNotifier {
     }
 
     final dio = Dio();
+    final options = Options(headers: await Store.apiHeaders());
+
     if (q.isEmpty) {
       debugPrint('Loading index (empty search): $url');
     } else {
       debugPrint('Loading search: $url');
     }
     
-    // Try request without options first
     try {
-      debugPrint('Trying request without headers...');
-      final response = await dio.get(url);
+      final response = await dio.get(url, options: options);
       print(response);
       final freshComics = NHList.fromJson(response.data);
       _noMorePage = freshComics.result?.isEmpty ?? true;
@@ -137,8 +133,6 @@ class ComicListModel extends ChangeNotifier {
       if (!_noMorePage) {
         _fetchedComics.add(freshComics);
       }
-      // todo 20240227 Tiny performance issue: it is known that when reaching last page (when freshComics is empty, i.e. {"result":[],"num_pages":2,"per_page":25}), it is rebuilding one more time.
-      // This call tells the widgets that are listening to this model to rebuild.
       notifyListeners();
       _fetchPage = (p, clearComic) => fetchSearch(
             q: q,
@@ -149,47 +143,16 @@ class ComicListModel extends ChangeNotifier {
           );
     } on DioException catch (e) {
       debugPrint(
-          "fetchSearch failed without headers, status code = ${e.response?.statusCode}");
-      debugPrint('Trying with headers...');
-      
-      // Get cookies only when needed
-      final (agent, token) = await Store.getCFCookies();
-      
-      // Try with headers if the first attempt fails
-      try {
-        final response = await dio.get(url,
-            options: Options(headers: {
-              HttpHeaders.userAgentHeader: agent,
-              HttpHeaders.cookieHeader: "cf_clearance=$token",
-            }));
-        print(response);
-        final freshComics = NHList.fromJson(response.data);
-        _noMorePage = freshComics.result?.isEmpty ?? true;
-        lastStatusCode = response.statusCode;
-        if (!_noMorePage) {
-          _fetchedComics.add(freshComics);
-        }
-        notifyListeners();
-        _fetchPage = (p, clearComic) => fetchSearch(
-              q: q,
-              page: p,
-              sortByPopularType: sortByPopularType,
-              retryCount: retryCount,
-              clearComic: clearComic,
-            );
-      } on DioException catch (e2) {
-        debugPrint(
-            "fetchSearch DioException with headers, status code = ${e2.response?.statusCode}");
-        debugPrint('fetchSearch failed ($url), retrying...');
-        return fetchSearch(
-          q: q,
-          page: page,
-          sortByPopularType: sortByPopularType,
-          retryCount: retryCount + 1,
-          lastStatusCode: e2.response?.statusCode,
-          clearComic: true,
-        );
-      }
+          "fetchSearch failed, status code = ${e.response?.statusCode}");
+      debugPrint('fetchSearch failed ($url), retrying with alternative language...');
+      return fetchSearch(
+        q: q,
+        page: page,
+        sortByPopularType: sortByPopularType,
+        retryCount: retryCount + 1,
+        lastStatusCode: e.response?.statusCode,
+        clearComic: true,
+      );
     }
 
     pageLoaded = page;
@@ -215,8 +178,9 @@ class CurrentComicModel extends ChangeNotifier {
       final id = _currentComic!.id!;
       final mid = _currentComic!.mediaId!;
       final title = _currentComic!.title!.english!;
-      final images = jsonEncode(_currentComic!.images!);
       final pages = _currentComic!.numPages!;
+      // Store v2 image info as JSON for DB
+      final images = jsonEncode(_currentComic!.toImagesJsonForDb());
       Store.addComic(
         id: id,
         mid: mid,
@@ -228,47 +192,27 @@ class CurrentComicModel extends ChangeNotifier {
     }
   }
 
-  Map<String, String>? headers;
-
   Future<void> fetchComic(String id) async {
     final dio = Dio();
+    final options = Options(headers: await Store.apiHeaders());
     
-    // Try request without headers first
     try {
-      debugPrint('Trying fetchComic without headers...');
-      final response = await dio.get('https://nhentai.net/api/gallery/$id');
+      debugPrint('fetchComic v2: /api/v2/galleries/$id');
+      final response = await dio.get(
+        'https://nhentai.net/api/v2/galleries/$id',
+        options: options,
+      );
       print(response);
       currentComic = NHComic.fromJson(response.data);
-      headers = null; // No headers needed
       notifyListeners();
     } catch (e) {
-      debugPrint('fetchComic failed without headers, trying with headers...');
-      
-      // Get cookies only when needed
-      final (agent, token) = await Store.getCFCookies();
-      
-      headers = {
-        HttpHeaders.userAgentHeader: agent,
-        HttpHeaders.cookieHeader: "cf_clearance=$token",
-      };
-      
-      // Try with headers if the first attempt fails
-      try {
-        final response = await dio.get('https://nhentai.net/api/gallery/$id',
-            options: Options(headers: headers));
-        print(response);
-        currentComic = NHComic.fromJson(response.data);
-        notifyListeners();
-      } catch (e2) {
-        print('fetchComic failed with headers: $e2');
-        rethrow;
-      }
+      print('fetchComic failed: $e');
+      rethrow;
     }
   }
 
   void clearComic() {
     currentComic = null;
-    // notifyListeners();
   }
 }
 

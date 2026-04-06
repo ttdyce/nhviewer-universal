@@ -6,17 +6,16 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:concept_nhv/model/data_model.dart';
 import 'package:concept_nhv/model/state_model.dart';
 import 'package:concept_nhv/theme.dart';
-// import 'package:concept_nhv/sample.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -278,7 +277,8 @@ class CollectionSliver extends StatelessWidget {
                 .toList();
             // Deduplicate by comicid (a comic can appear in multiple collections)
             final seen = <String>{};
-            collectedComics.retainWhere((e) => seen.add(e['comicid'] as String));
+            collectedComics
+                .retainWhere((e) => seen.add(e['comicid'] as String));
             // Sort by queue order
             collectedComics.sort((a, b) {
               final aIdx = comicSessionQueue.indexOf(a['comicid'] as String);
@@ -310,18 +310,34 @@ class CollectionSliver extends StatelessWidget {
 
           List<ComicCover> collectionComics = collectedComics.map((e) {
             try {
-              var images = NHImages.fromJson(jsonDecode(e['images'] as String));
-              return ComicCover(
-                id: e['comicid'] as String,
-                mediaId: e['mid'] as String,
-                title: e['title'] as String,
-                images: images,
-                pages: e['pages'] as int,
-                thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-                thumbnailWidth: images.thumbnail!.w!,
-                thumbnailHeight: images.thumbnail!.h!,
-              );
-            } on FormatException catch (e) {
+              var decoded = jsonDecode(e['images'] as String);
+              if (decoded is Map<String, dynamic> && decoded['v2'] == true) {
+                final thumb = decoded['thumbnail'] as Map<String, dynamic>;
+                return ComicCover(
+                  id: e['comicid'] as String,
+                  mediaId: e['mid'] as String,
+                  title: e['title'] as String,
+                  pages: e['pages'] as int,
+                  thumbnailUrl: thumb['path'] as String?,
+                  thumbnailExt: 'jpg',
+                  thumbnailWidth: thumb['width'] as int? ?? 250,
+                  thumbnailHeight: thumb['height'] as int? ?? 350,
+                );
+              }
+              if (decoded is Map<String, dynamic>) {
+                var images = NHImages.fromJson(decoded);
+                return ComicCover(
+                  id: e['comicid'] as String,
+                  mediaId: e['mid'] as String,
+                  title: e['title'] as String,
+                  images: images,
+                  pages: e['pages'] as int,
+                  thumbnailExt: App.extMap[images.thumbnail!.t!] ?? 'jpg',
+                  thumbnailWidth: images.thumbnail!.w!,
+                  thumbnailHeight: images.thumbnail!.h!,
+                );
+              }
+            } on FormatException catch (_) {
               debugPrint('images is not json (old format images)');
             }
 
@@ -330,7 +346,6 @@ class CollectionSliver extends StatelessWidget {
               id: e['comicid'] as String,
               mediaId: e['mid'] as String,
               title: e['title'] as String,
-              images: NHImages(pages: null, cover: null, thumbnail: null),
               pages: e['pages'] as int,
               thumbnailExt: App.extMap[images[0]] ?? 'jpg',
               thumbnailWidth: 9,
@@ -398,17 +413,31 @@ class CollectionListScreen extends StatelessWidget {
               }
               final mid = firstItem['mid'] as String;
               try {
-                var images = NHImages.fromJson(
-                    jsonDecode(firstItem['images'] as String));
-                return CollectionCover(
-                  mid: mid,
-                  collectionName: firstItem['name'] as String,
-                  collectedCount: e.value.length,
-                  thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-                  thumbnailWidth: images.thumbnail!.w!,
-                  thumbnailHeight: images.thumbnail!.h!,
-                );
-              } on FormatException catch (e) {
+                var decoded = jsonDecode(firstItem['images'] as String);
+                if (decoded is Map<String, dynamic> && decoded['v2'] == true) {
+                  final thumb = decoded['thumbnail'] as Map<String, dynamic>;
+                  return CollectionCover(
+                    mid: mid,
+                    collectionName: firstItem['name'] as String,
+                    collectedCount: e.value.length,
+                    thumbnailUrl: thumb['path'] as String?,
+                    thumbnailExt: 'jpg',
+                    thumbnailWidth: thumb['width'] as int? ?? 250,
+                    thumbnailHeight: thumb['height'] as int? ?? 350,
+                  );
+                }
+                if (decoded is Map<String, dynamic>) {
+                  var images = NHImages.fromJson(decoded);
+                  return CollectionCover(
+                    mid: mid,
+                    collectionName: firstItem['name'] as String,
+                    collectedCount: e.value.length,
+                    thumbnailExt: App.extMap[images.thumbnail!.t!] ?? 'jpg',
+                    thumbnailWidth: images.thumbnail!.w!,
+                    thumbnailHeight: images.thumbnail!.h!,
+                  );
+                }
+              } on FormatException catch (_) {
                 debugPrint('images is not json (old format images)');
               }
 
@@ -417,7 +446,7 @@ class CollectionListScreen extends StatelessWidget {
                 mid: mid,
                 collectionName: firstItem['name'] as String,
                 collectedCount: e.value.length,
-                thumbnailExt: App.extMap[images[0]]!,
+                thumbnailExt: App.extMap[images[0]] ?? 'jpg',
                 thumbnailWidth: 9,
                 thumbnailHeight: 16,
               );
@@ -434,16 +463,40 @@ class CollectionListScreen extends StatelessWidget {
               if (queuedComic != null) {
                 final mid = queuedComic['mid'] as String;
                 try {
-                  var images = NHImages.fromJson(
-                      jsonDecode(queuedComic['images'] as String));
-                  collections.add(CollectionCover(
-                    mid: mid,
-                    collectionName: 'Queue',
-                    collectedCount: comicSessionQueue.length,
-                    thumbnailExt: App.extMap[images.thumbnail!.t!]!,
-                    thumbnailWidth: images.thumbnail!.w!,
-                    thumbnailHeight: images.thumbnail!.h!,
-                  ));
+                  var decoded = jsonDecode(queuedComic['images'] as String);
+                  if (decoded is Map<String, dynamic> &&
+                      decoded['v2'] == true) {
+                    final thumb = decoded['thumbnail'] as Map<String, dynamic>;
+                    collections.add(CollectionCover(
+                      mid: mid,
+                      collectionName: 'Queue',
+                      collectedCount: comicSessionQueue.length,
+                      thumbnailUrl: thumb['path'] as String?,
+                      thumbnailExt: 'jpg',
+                      thumbnailWidth: thumb['width'] as int? ?? 250,
+                      thumbnailHeight: thumb['height'] as int? ?? 350,
+                    ));
+                  } else if (decoded is Map<String, dynamic>) {
+                    var images = NHImages.fromJson(decoded);
+                    collections.add(CollectionCover(
+                      mid: mid,
+                      collectionName: 'Queue',
+                      collectedCount: comicSessionQueue.length,
+                      thumbnailExt: App.extMap[images.thumbnail!.t!] ?? 'jpg',
+                      thumbnailWidth: images.thumbnail!.w!,
+                      thumbnailHeight: images.thumbnail!.h!,
+                    ));
+                  } else {
+                    var images = queuedComic['images'] as String;
+                    collections.add(CollectionCover(
+                      mid: mid,
+                      collectionName: 'Queue',
+                      collectedCount: comicSessionQueue.length,
+                      thumbnailExt: App.extMap[images[0]] ?? 'jpg',
+                      thumbnailWidth: 9,
+                      thumbnailHeight: 16,
+                    ));
+                  }
                 } on FormatException catch (_) {
                   var images = queuedComic['images'] as String;
                   collections.add(CollectionCover(
@@ -502,7 +555,6 @@ enum NHLanguage {
         return ['-language:english -language:japanese', '汉化', '中国'];
       case NHLanguage.japanese:
       case NHLanguage.english:
-      default:
         return [];
     }
   }
@@ -520,6 +572,11 @@ class NHPopularType {
 
 class Store {
   static late final Future<Database> _database;
+  static NHCdnConfig? _cdnConfig;
+  static String _userAgent =
+      'nhviewer/unknown (https://github.com/ttdyce/nhviewer-universal)';
+
+  static String get userAgent => _userAgent;
 
   static init() async {
     late final String path;
@@ -529,18 +586,10 @@ class Store {
     } else {
       path = join(await getDatabasesPath(), 'database.db');
     }
-    // debugPrint(join((await getLibraryDirectory()).path, 'database.db'));
-    // debugPrint(join(await getDatabasesPath(), 'database.db'));
 
-    // uncomment to refresh token, for debug purpose
-    // deleteDatabase(path);
     _database = openDatabase(
-      // Set the path to the database. Note: Using the `join` function from the
-      // `path` package is best practice to ensure the path is correctly
-      // constructed for each platform.
       path,
       onCreate: (db, version) async {
-        // Run the CREATE TABLE statement on the database.
         await db.execute(
           'CREATE TABLE Options(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, value TEXT NOT NULL)',
         );
@@ -554,8 +603,6 @@ class Store {
           'CREATE TABLE SearchHistory(id INTEGER PRIMARY KEY, query TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)',
         );
       },
-      // Set the version. This executes the onCreate function and provides a
-      // path to perform database upgrades and downgrades.
       // todo 20240306 combine every db migration into version 1, as release version 1
       version: 4,
       onUpgrade: (db, oldVersion, newVersion) {
@@ -580,54 +627,63 @@ class Store {
       },
     );
 
+    // Initialize User-Agent with app version
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _userAgent =
+          'nhviewer/${packageInfo.version} (https://github.com/ttdyce/nhviewer-universal)';
+    } catch (e) {
+      debugPrint('Failed to get package info: $e');
+    }
+
     // todo 20240308 load comic language from Options
   }
 
-  static Future<void> setCFCookies(String userAgent, String token) async {
-    final db = await _database;
-    await db.insert(
-      'Options',
-      {
-        'name': 'userAgent',
-        'value': userAgent,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-    await db.insert(
-      'Options',
-      {
-        'name': 'token',
-        'value': token,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
-
-  static Future<(String, String)> getCFCookies() async {
-    final db = await _database;
-    final userAgent = await db
-        .rawQuery('select value from Options where name = ?', ['userAgent']);
-    final token = await db
-        .rawQuery('select value from Options where name = ?', ['token']);
-    if (userAgent.isNotEmpty && token.isNotEmpty) {
-      return (
-        userAgent.first['value'] as String,
-        token.first['value'] as String
+  /// Fetch and cache CDN config from /api/v2/cdn
+  static Future<NHCdnConfig> getCdnConfig() async {
+    if (_cdnConfig != null) return _cdnConfig!;
+    try {
+      final dio = Dio();
+      final response = await dio.get(
+        'https://nhentai.net/api/v2/cdn',
+        options: Options(headers: await apiHeaders()),
+      );
+      _cdnConfig = NHCdnConfig.fromJson(response.data);
+    } catch (e) {
+      debugPrint('Failed to fetch CDN config, using defaults: $e');
+      _cdnConfig = NHCdnConfig(
+        imageServers: ['https://i3.nhentai.net'],
+        thumbServers: ['https://t3.nhentai.net'],
       );
     }
-
-    return ("", "");
+    return _cdnConfig!;
   }
 
-  static Future<int> deleteCFCookies() async {
-    final db = await _database;
-    final rowsDeleted = await db.delete(
-      'Options',
-      where: 'name = ? OR name = ?',
-      whereArgs: ['userAgent', 'token'],
-    );
+  /// Build full image URL from a path (handles both full URLs and relative paths)
+  static String resolveImageUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    final server = _cdnConfig?.imageServer ?? 'https://i3.nhentai.net';
+    if (path.startsWith('/')) return '$server$path';
+    return '$server/$path';
+  }
 
-    return rowsDeleted;
+  /// Build full thumbnail URL from a path (handles both full URLs and relative paths)
+  static String resolveThumbUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    final server = _cdnConfig?.thumbServer ?? 'https://t3.nhentai.net';
+    if (path.startsWith('/')) return '$server$path';
+    return '$server/$path';
+  }
+
+  /// Build common API headers for public API access.
+  static Future<Map<String, String>> apiHeaders() async {
+    return {
+      'User-Agent': userAgent,
+    };
   }
 
   static Future<void> setOption(String name, String value) async {
@@ -744,8 +800,7 @@ class Store {
         "select * from Collection col, Comic com where col.comicid = com.id order by dateCreated desc");
 
     debugPrint('testing comics...');
-    final List<Map<String, Object?>> comics =
-        await db.rawQuery("select * from Comic");
+    await db.rawQuery("select * from Comic");
 
     return collectedComics;
   }
@@ -778,176 +833,120 @@ class Store {
   }
 }
 
-class FirstScreen extends StatelessWidget {
-  static const platform = MethodChannel('samples.flutter.dev/cookies');
+class FirstScreen extends StatefulWidget {
   const FirstScreen({super.key});
 
-  Future<(String, String)> receiveCFCookies(
-      controller, Future<void> Function() fetchIndex) async {
-    String cookies;
-    String? token;
-    try {
-      token = await platform.invokeMethod<String>('receiveCFCookies');
-      if (token == null) {
-        return ("", "");
-      }
-      debugPrint("receiveCFCookies1: ---$token===");
-      if (token.contains("cf_clearance=")) {
-        token = token
-            .split("; ")
-            .firstWhere((element) => element.startsWith("cf_clearance="))
-            .split("=")[1];
-      }
+  @override
+  State<FirstScreen> createState() => _FirstScreenState();
+}
 
-      cookies = 'Cookies: $token';
-    } on PlatformException catch (e) {
-      cookies = "Failed to get cookie: '${e.message}'.";
-    }
+class _FirstScreenState extends State<FirstScreen> {
+  Future<_FirstScreenResult>? _connectionFuture;
 
-    debugPrint(cookies);
-    final String useragent = await controller.getUserAgent();
-    debugPrint(useragent);
-
-    await Store.setCFCookies(useragent, token ?? '');
-    await fetchIndex();
-    return (useragent, token ?? '');
+  @override
+  void initState() {
+    super.initState();
+    _connectionFuture = _checkAndConnect();
   }
 
-  Future<bool> testLastCFCookies() async {
-    debugPrint("testLastCFCookies...");
-    
-    final dio = Dio();
-    const url = "https://nhentai.net";
-    
-    // Try request without headers first
+  Future<_FirstScreenResult> _checkAndConnect() async {
     try {
-      debugPrint("Testing without headers...");
-      await dio.get(url);
-      debugPrint("testLastCFCookies ok without headers!");
-      return true;
-    } on DioException catch (e) {
-      debugPrint(
-          "testing failed without headers. DioException: status code=${e.response?.statusCode}");
-      debugPrint("Trying with headers...");
-      
-      // Get cookies only when needed
-      final (agent, token) = await Store.getCFCookies();
-      if (agent.isEmpty || token.isEmpty) {
-        debugPrint("Note: Found empty user agent or token, still testing...");
-        // return false;
-      } else {
-        debugPrint("Found previous user agent and token! testing...");
-      }
-      
-      // Try with headers if the first attempt fails
-      try {
-        await dio.get(url,
-            options: Options(headers: {
-              HttpHeaders.userAgentHeader: agent,
-              HttpHeaders.cookieHeader: "cf_clearance=$token",
-            }));
-        debugPrint("testLastCFCookies ok with headers!");
-        debugPrint("testLastCFCookies $token");
-        return true;
-      } on DioException catch (e2) {
-        debugPrint(
-            "testing failed with headers. DioException: status code=${e2.response?.statusCode}");
-        await Store.deleteCFCookies();
-        return false;
-      }
+      await Store.getCdnConfig();
+      final dio = Dio();
+      final response = await dio.get(
+        'https://nhentai.net/api/v2',
+        options: Options(headers: await Store.apiHeaders()),
+      );
+      debugPrint("API connection ok: ${response.statusCode}");
+      return _FirstScreenResult.ok;
+    } catch (e) {
+      debugPrint("API connection failed: $e");
+      return _FirstScreenResult.failed;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = WebViewController();
-
     return Scaffold(
-      body: FutureBuilder(
-        future: testLastCFCookies(),
-        builder: (BuildContext context, AsyncSnapshot snapshot) {
+      body: FutureBuilder<_FirstScreenResult>(
+        future: _connectionFuture,
+        builder:
+            (BuildContext context, AsyncSnapshot<_FirstScreenResult> snapshot) {
           if (!snapshot.hasData) {
-            // todo 20240304 Show splash screen while testing existing CFCookies
             return const Center(
                 child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 CircularProgressIndicator(),
-                Text(
-                  'Loading...',
-                ),
+                Text('Connecting...'),
               ],
             ));
           }
 
-          final bool passTest = snapshot.data;
-          if (passTest) {
-            WidgetsBinding.instance.addPostFrameCallback((_) async {
-              context.read<AppModel>().isLoading = true;
-              await context.read<ComicListModel>().fetchIndex();
-              if (!context.mounted) return;
-              context.read<AppModel>().isLoading = false;
-              context.go('/index');
-            });
-
-            // todo 20240304 Show splash screen while testing existing CFCookies
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  Text('Loading index...'),
-                ],
-              ),
-            );
-          } else {
-            controller
-              ..setJavaScriptMode(JavaScriptMode.unrestricted)
-              ..setBackgroundColor(const Color(0x00000000))
-              ..setNavigationDelegate(
-                NavigationDelegate(
-                  onPageFinished: (String url) async {
-                    context.read<AppModel>().isLoading = true;
-                    // handle "Click to verify you are human" before go /index, checking if Cookie is set on page loaded
-                    final (_, token) = await receiveCFCookies(
-                        controller,
-                        Provider.of<ComicListModel>(context, listen: false)
-                            .fetchIndex);
-                    //retest new cookie
-                    if (!await testLastCFCookies()) {
-                      return;
-                    }
-                    if (!context.mounted || token.isEmpty) return;
-                    context.read<AppModel>().isLoading = false;
-                    context.go('/index');
-                  },
-                ),
-              )
-              ..loadRequest(Uri.parse('https://nhentai.net'));
-          }
-
-          return SafeArea(
-            child: Scaffold(
-              body: Center(
+          switch (snapshot.data!) {
+            case _FirstScreenResult.ok:
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                context.read<AppModel>().isLoading = true;
+                await context.read<ComicListModel>().fetchIndex();
+                if (!context.mounted) return;
+                context.read<AppModel>().isLoading = false;
+                context.go('/index');
+              });
+              return const Center(
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                        'Passing Cloudflare checking, please wait and click "I am human" checkbox if any...'),
-                    Expanded(
-                        child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: WebViewWidget(controller: controller),
-                    )),
+                    CircularProgressIndicator(),
+                    Text('Loading index...'),
                   ],
                 ),
-              ),
-            ),
-          );
+              );
+
+            case _FirstScreenResult.failed:
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Failed to connect to API',
+                        style: TextStyle(fontSize: 18),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Check your network connection',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _connectionFuture = _checkAndConnect();
+                              });
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+          }
         },
       ),
     );
   }
 }
+
+enum _FirstScreenResult { ok, failed }
 
 class IndexScreen extends StatelessWidget {
   const IndexScreen({super.key});
@@ -978,8 +977,7 @@ class _ThirdScreenState extends State<ThirdScreen> {
       final id = GoRouterState.of(ctx).uri.queryParameters['id'] ?? '';
       Store.getOption("lastSeenOffset-$id").then((lastSeenOffset) {
         if (!mounted) return;
-        debugPrint(
-            "getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
+        debugPrint("getOption lastSeenOffset-$id ${lastSeenOffset.toString()}");
         if (lastSeenOffset.isNotEmpty) {
           ctx.read<CurrentComicModel>().scrollController.animateTo(
                 double.parse(lastSeenOffset),
@@ -993,10 +991,8 @@ class _ThirdScreenState extends State<ThirdScreen> {
                 content: const Text("Loaded last seen page"),
                 action: SnackBarAction(
                   label: "Back to top",
-                  onPressed: () => ctx
-                      .read<CurrentComicModel>()
-                      .scrollController
-                      ?.jumpTo(0),
+                  onPressed: () =>
+                      ctx.read<CurrentComicModel>().scrollController.jumpTo(0),
                 ),
                 behavior: SnackBarBehavior.floating,
                 duration: const Duration(seconds: 3),
@@ -1071,138 +1067,167 @@ class _ThirdScreenState extends State<ThirdScreen> {
         child: Stack(
           children: [
             NotificationListener(
-        onNotification: (notification) {
-          if (notification is ScrollEndNotification) {
-            if (context.read<CurrentComicModel>().scrollController.offset !=
-                0) {
-              Store.setOption(
-                  "lastSeenOffset-$id",
-                  context
-                      .read<CurrentComicModel>()
-                      .scrollController
-                      .offset
-                      .toString());
-              debugPrint(
-                  "setOption lastSeenOffset-$id ${context.read<CurrentComicModel>().scrollController.offset.toString()}");
-            }
-          }
-
-          return false; // Return true if the notification should be canceled.
-        },
-        child: CustomScrollView(
-          controller: context.read<CurrentComicModel>().scrollController,
-          slivers: <Widget>[
-            SliverAppBar(
-                // title: Text(id),
-                // todo 20240322 allow add to collection when viewing comic, required mid+title+pages+comic.images
-                // actions: [
-                //   IconButton(
-                //     icon: const Icon(Icons.favorite_outline),
-                //     onPressed: () {
-                //       Store.addComic(
-                //         id: id,
-                //         mid: mid,
-                //         title: title,
-                //         pages: pages,
-                //         images: jsonEncode(comic.images.toJson()),
-                //       );
-                //       Store.collectComic(collectionName: 'Favorite', id: id);
-                //     },
-                //   ),
-                // ],
-                forceMaterialTransparency: true,
-                pinned: true,
-                flexibleSpace: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: <Color>[Colors.black38, Colors.transparent],
-                      stops: [0.0, 1],
-                    ),
-                  ),
-                )),
-            Consumer<CurrentComicModel>(
-              builder: (context, currentComicModel, child) {
-                if (currentComicModel.currentComic == null) {
-                  return SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        return const LinearProgressIndicator();
-                      },
-                      childCount: 1,
-                    ),
-                  );
+              onNotification: (notification) {
+                if (notification is ScrollEndNotification) {
+                  if (context
+                          .read<CurrentComicModel>()
+                          .scrollController
+                          .offset !=
+                      0) {
+                    Store.setOption(
+                        "lastSeenOffset-$id",
+                        context
+                            .read<CurrentComicModel>()
+                            .scrollController
+                            .offset
+                            .toString());
+                    debugPrint(
+                        "setOption lastSeenOffset-$id ${context.read<CurrentComicModel>().scrollController.offset.toString()}");
+                  }
                 }
 
-                final NHComic c = currentComicModel.currentComic!;
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      final page = index + 1;
-                      final mid = c.mediaId;
-                      final ext = App.extMap[c.images!.pages![index].t] ?? 'jpg';
-                      final width = c.images!.pages![index].w!;
-                      final height = c.images!.pages![index].h!;
-                      final url =
-                          "https://i3.nhentai.net/galleries/$mid/$page.$ext";
-                      debugPrint(url);
-                      // Stack of comic image, page number
-                      return Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          SimpleCachedNetworkImage(
-                              url: url, width: width, height: height),
-                          Text("P$page"),
-                        ],
+                return false; // Return true if the notification should be canceled.
+              },
+              child: CustomScrollView(
+                controller: context.read<CurrentComicModel>().scrollController,
+                slivers: <Widget>[
+                  SliverAppBar(
+                      // title: Text(id),
+                      // todo 20240322 allow add to collection when viewing comic, required mid+title+pages+comic.images
+                      // actions: [
+                      //   IconButton(
+                      //     icon: const Icon(Icons.favorite_outline),
+                      //     onPressed: () {
+                      //       Store.addComic(
+                      //         id: id,
+                      //         mid: mid,
+                      //         title: title,
+                      //         pages: pages,
+                      //         images: jsonEncode(comic.images.toJson()),
+                      //       );
+                      //       Store.collectComic(collectionName: 'Favorite', id: id);
+                      //     },
+                      //   ),
+                      // ],
+                      forceMaterialTransparency: true,
+                      pinned: true,
+                      flexibleSpace: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: <Color>[Colors.black38, Colors.transparent],
+                            stops: [0.0, 1],
+                          ),
+                        ),
+                      )),
+                  Consumer<CurrentComicModel>(
+                    builder: (context, currentComicModel, child) {
+                      if (currentComicModel.currentComic == null) {
+                        return SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (BuildContext context, int index) {
+                              return const LinearProgressIndicator();
+                            },
+                            childCount: 1,
+                          ),
+                        );
+                      }
+
+                      final NHComic c = currentComicModel.currentComic!;
+                      return SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (BuildContext context, int index) {
+                            final page = index + 1;
+                            final mid = c.mediaId;
+                            String url;
+                            int width;
+                            int height;
+
+                            if (c.pageInfos != null &&
+                                index < c.pageInfos!.length) {
+                              // v2 API: use page info with path
+                              final pageInfo = c.pageInfos![index];
+                              url = Store.resolveImageUrl(pageInfo.path!);
+                              width = pageInfo.width!;
+                              height = pageInfo.height!;
+                            } else if (c.images?.pages != null &&
+                                index < c.images!.pages!.length) {
+                              // Legacy fallback: construct URL from old format
+                              final ext =
+                                  App.extMap[c.images!.pages![index].t] ??
+                                      'jpg';
+                              width = c.images!.pages![index].w!;
+                              height = c.images!.pages![index].h!;
+                              url =
+                                  "https://i3.nhentai.net/galleries/$mid/$page.$ext";
+                            } else {
+                              url = '';
+                              width = 1;
+                              height = 1;
+                            }
+
+                            debugPrint(url);
+                            // Stack of comic image, page number
+                            return Stack(
+                              alignment: Alignment.bottomRight,
+                              children: [
+                                SimpleCachedNetworkImage(
+                                    url: url, width: width, height: height),
+                                Text("P$page"),
+                              ],
+                            );
+                          },
+                          childCount: currentComicModel.currentComic!.numPages,
+                        ),
                       );
                     },
-                    childCount: currentComicModel.currentComic!.numPages,
                   ),
-                );
-              },
-            ),
-            // Queue navigation hint
-            if (inQueue && (nextId != null || prevId != null))
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Queue: ${comicSessionQueue.indexOf(id) + 1}/${comicSessionQueue.length}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        if (nextId != null || prevId != null)
-                          Text(
-                            'Swipe horizontally to switch comics',
-                            style: Theme.of(context).textTheme.bodySmall,
+                  // Queue navigation hint
+                  if (inQueue && (nextId != null || prevId != null))
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24.0),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Text(
+                                'Queue: ${comicSessionQueue.indexOf(id) + 1}/${comicSessionQueue.length}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              if (nextId != null || prevId != null)
+                                Text(
+                                  'Swipe horizontally to switch comics',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                            ],
                           ),
-                      ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ),
-          ],  // slivers
-        ),  // CustomScrollView
-      ),  // NotificationListener
+                ], // slivers
+              ), // CustomScrollView
+            ), // NotificationListener
             // Swipe arrow indicator overlay
-            if (_horizontalDragDelta.abs() > 10) _buildSwipeIndicator(context, nextId, prevId),
-          ],  // Stack children
-        ),  // Stack
-      ),  // GestureDetector
+            if (_horizontalDragDelta.abs() > 10)
+              _buildSwipeIndicator(context, nextId, prevId),
+          ], // Stack children
+        ), // Stack
+      ), // GestureDetector
     );
   }
 
-  Widget _buildSwipeIndicator(BuildContext context, String? nextId, String? prevId) {
+  Widget _buildSwipeIndicator(
+      BuildContext context, String? nextId, String? prevId) {
     final swipingLeft = _horizontalDragDelta < 0;
     final swipingRight = _horizontalDragDelta > 0;
-    final hasTarget = (swipingLeft && nextId != null) || (swipingRight && prevId != null);
+    final hasTarget =
+        (swipingLeft && nextId != null) || (swipingRight && prevId != null);
 
     if (!hasTarget) return const SizedBox.shrink();
 
-    final progress = (_horizontalDragDelta.abs() / _swipeThreshold).clamp(0.0, 1.0);
+    final progress =
+        (_horizontalDragDelta.abs() / _swipeThreshold).clamp(0.0, 1.0);
     final screenHeight = MediaQuery.of(context).size.height;
 
     // Arrow appears on the edge the user is swiping from
@@ -1236,7 +1261,9 @@ class _ThirdScreenState extends State<ThirdScreen> {
               ),
               child: Icon(
                 isLeftEdge ? Icons.arrow_back : Icons.arrow_forward,
-                color: progress >= 1.0 ? Colors.white : Colors.white.withAlpha((progress * 255).toInt()),
+                color: progress >= 1.0
+                    ? Colors.white
+                    : Colors.white.withAlpha((progress * 255).toInt()),
                 size: 32,
               ),
             ),
@@ -1370,7 +1397,9 @@ class SettingsScreen extends StatelessWidget {
                   Store.collectComic(
                     collectionName: json['name'],
                     id: "${json['id']}",
-                    dateCreated: DateTime.fromMillisecondsSinceEpoch(json['dateCreated']).toIso8601String(),
+                    dateCreated:
+                        DateTime.fromMillisecondsSinceEpoch(json['dateCreated'])
+                            .toIso8601String(),
                   );
                 }
 
@@ -1413,7 +1442,7 @@ class SettingsScreen extends StatelessWidget {
 
 class SimpleCachedNetworkImage extends StatelessWidget {
   // debt 20250213 hardcode DEMO_MODE to true for now
-  final bool DEMO_MODE = false; 
+  final bool DEMO_MODE = false;
 
   const SimpleCachedNetworkImage({
     super.key,
@@ -1432,7 +1461,6 @@ class SimpleCachedNetworkImage extends StatelessWidget {
       children: [
         CachedNetworkImage(
           imageUrl: url,
-          httpHeaders: Provider.of<CurrentComicModel>(context).headers,
           placeholder: (context, url) => AspectRatio(
             aspectRatio: width / height,
             child: const Center(
@@ -1610,7 +1638,7 @@ class _AppState extends State<App> {
                   //   icon: const Icon(Icons.search, color: Colors.black),
                   // ),
                   barHintText: "Search comic",
-                  barElevation: MaterialStateProperty.all(0),
+                  barElevation: WidgetStateProperty.all(0),
                   suggestionsBuilder:
                       (BuildContext buildContext, SearchController controller) {
                     return Store.getSearchHistory()
@@ -1693,14 +1721,18 @@ class _AppState extends State<App> {
                     .map((e) => ComicCover(
                           id: e.id!,
                           mediaId: e.mediaId!,
-                          title: e.title!.english!,
-                          images: e.images!,
+                          title: e.title!.english ?? e.title!.pretty ?? '',
+                          images: e.images,
                           pages: e.numPages!,
-                          // 20241117 we have "t":"w" now, guessing it's webp. Also setting fallback value to jpg to avoid crashing the whole page
-                          thumbnailExt:
-                              App.extMap[e.images!.thumbnail!.t!] ?? "jpg",
-                          thumbnailWidth: e.images!.thumbnail!.w!,
-                          thumbnailHeight: e.images!.thumbnail!.h!,
+                          thumbnailUrl: e.thumbnailUrl,
+                          thumbnailExt: e.images?.thumbnail?.t != null
+                              ? (App.extMap[e.images!.thumbnail!.t!] ?? "jpg")
+                              : "jpg",
+                          thumbnailWidth:
+                              e.thumbnailWidth ?? e.images?.thumbnail?.w ?? 250,
+                          thumbnailHeight: e.thumbnailHeight ??
+                              e.images?.thumbnail?.h ??
+                              350,
                         ))
                     .toList(),
                 comicsLoaded: comicListModel.comicsLoaded,
@@ -1878,20 +1910,19 @@ class ComicSliverGrid extends StatelessWidget {
                 );
           }
           debugPrint("index: $index");
-          // if (nhlist == null) return Container();
           final id = comic.id;
           final mid = comic.mediaId;
           final title = comic.title;
           final pages = comic.pages;
-          // final ext = App.extMap[comic.images.thumbnail!.t];
-          final ext = comic.thumbnailExt;
-          // final thumbnailWidth = comic.images.thumbnail!.w!;
-          // final thumbnailHeight = comic.images.thumbnail!.h!;
           final thumbnailWidth = comic.thumbnailWidth;
           final thumbnailHeight = comic.thumbnailHeight;
-          var thumbnailLink =
-              "https://t3.nhentai.net/galleries/$mid/thumb.$ext";
-          debugPrint("https://t3.nhentai.net/galleries/$mid/thumb.$ext");
+          // v2: use direct thumbnail URL if available, otherwise fallback to legacy
+          var thumbnailLink = comic.thumbnailUrl ??
+              "https://t3.nhentai.net/galleries/$mid/thumb.${comic.thumbnailExt}";
+          if (comic.thumbnailUrl != null) {
+            thumbnailLink = Store.resolveThumbUrl(comic.thumbnailUrl!);
+          }
+          debugPrint(thumbnailLink);
 
           return ComicListItem(
             id: id,
@@ -2064,7 +2095,7 @@ class ComicListItem extends StatelessWidget {
                   mid: mid,
                   title: title,
                   pages: pages,
-                  images: jsonEncode(comic.images.toJson()),
+                  images: comic.toImagesJson(),
                 );
                 Store.collectComic(collectionName: 'Next', id: id);
                 context.read<ComicSessionQueueModel>().add(id);
@@ -2086,7 +2117,7 @@ class ComicListItem extends StatelessWidget {
                   mid: mid,
                   title: title,
                   pages: pages,
-                  images: jsonEncode(comic.images.toJson()),
+                  images: comic.toImagesJson(),
                 );
                 Store.collectComic(collectionName: 'Favorite', id: id);
 
@@ -2190,23 +2221,43 @@ class ComicCover {
   final String id;
   final String mediaId;
   final String title;
-  final NHImages images;
+  final NHImages? images;
   final int pages;
 
   final String thumbnailExt;
   final int thumbnailWidth;
   final int thumbnailHeight;
+  final String? thumbnailUrl; // v2: direct URL from API
 
   ComicCover({
     required this.id,
     required this.mediaId,
     required this.title,
-    required this.images,
+    this.images,
     required this.pages,
     required this.thumbnailExt,
     required this.thumbnailWidth,
     required this.thumbnailHeight,
+    this.thumbnailUrl,
   });
+
+  /// Returns images JSON for DB storage, handling both v2 and legacy formats.
+  String toImagesJson() {
+    if (thumbnailUrl != null) {
+      return jsonEncode({
+        'v2': true,
+        'thumbnail': {
+          'path': thumbnailUrl,
+          'width': thumbnailWidth,
+          'height': thumbnailHeight,
+        },
+      });
+    }
+    if (images != null) {
+      return jsonEncode(images!.toJson());
+    }
+    return '{}';
+  }
 
   @override
   String toString() {
@@ -2222,8 +2273,12 @@ class CollectionCover {
   final String thumbnailExt;
   final int thumbnailWidth;
   final int thumbnailHeight;
+  final String? thumbnailUrl; // v2: direct URL from API
 
   String get thumbnailLink {
+    if (thumbnailUrl != null) {
+      return Store.resolveThumbUrl(thumbnailUrl!);
+    }
     if (mid != "-1") {
       return "https://t3.nhentai.net/galleries/$mid/thumb.$thumbnailExt";
     }
@@ -2238,6 +2293,7 @@ class CollectionCover {
     required this.thumbnailWidth,
     required this.thumbnailHeight,
     required this.mid,
+    this.thumbnailUrl,
   });
 
   static CollectionCover emptyCollection({required String collectionName}) {

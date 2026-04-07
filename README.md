@@ -120,7 +120,9 @@ _For more examples, please refer to the [Documentation](https://example.com)_
  
 ## APIs
 
-_refer to the [API-README](API-README.md)_
+Official public v2 API docs: https://nhentai.net/api/v2/docs
+
+Older project API notes are kept in [API-README](API-README.md) for reference only.
 
 <p align="right"> <a href="#readme-top"> ‣ back to top</a> </p>
 

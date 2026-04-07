@@ -2,7 +2,13 @@
 
 Document of the site's API that nhviewer might use.
 
-## Useful URL
+> Note: The official public v2 API docs at https://nhentai.net/api/v2/docs are the main source. That page also links the OpenAPI JSON and changelog.
+>
+> For this app, the API key is mostly optional. It is only needed for user-specific data and access: `Authorization: Key YOUR_API_KEY`.
+>
+> The rest of this file is older endpoint notes, testing links, and project notes kept for reference.
+
+## Legacy / Reference URLs
 
 - Comic list of search
   - https://nhentai.net/api/galleries/search?query=chinese

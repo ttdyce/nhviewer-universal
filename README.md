@@ -76,6 +76,8 @@
 
 - Collection system
   - Add / remove comic from Favorite / Read later / History
+- Comic Queue
+  - Add comics to a temporary Queue and swipe left or right to read the next one
 - Vertical scrolling
 - Basic Comic list sorting (by popularity / uploaded recently)
 - Search with specific language (Chinese / English / Japanese)

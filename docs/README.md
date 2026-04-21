@@ -5,7 +5,7 @@ See `README.md` for base app description and build instructions.
 
 See `docs/docs.md` for documentation of how the app works.
 
-See `docs/build.md` for some simple instructions for how to build the app.
+See `docs/build.md` for more in-depth instructions for how to build the app.
 
 See `android/app/src/main/docs.md` for documentation of the Flutter view build.
 

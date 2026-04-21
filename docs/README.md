@@ -9,6 +9,6 @@ See `docs/build.md` for some simple instructions for how to build the app.
 
 See `android/app/src/main/docs.md` for documentation of the Flutter view build.
 
-# Credits
+#### Credits
 
-Written by afterDarkInvalid, 2026-04-20
+*Written by afterDarkInvalid, 2026-04-20*

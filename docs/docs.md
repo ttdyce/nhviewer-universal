@@ -7,3 +7,7 @@ The `android` directory is for the Android flutter build. For the most part, ass
 ### `lib`
 
 The `lib` directory contains the program logic, including the API caller. See more documentation at `lib/README.md`.
+
+#### Credits
+
+*Written by afterDarkInvalid, 2026-04-20*
